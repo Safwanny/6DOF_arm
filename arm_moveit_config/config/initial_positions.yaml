@@ -1,0 +1,10 @@
+# Default initial positions for robot_arm's ros2_control fake system
+
+initial_positions:
+  arm_elbow_link: 0
+  base_shoulder_link: 0
+  elbow_forearm_link: 0
+  forearm_wrist_link: 0
+  gripper_left_finger_joint: 0
+  shoudler_arm_link: 0
+  wrist_hand_link: 0
