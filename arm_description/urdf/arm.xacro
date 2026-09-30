@@ -112,17 +112,17 @@
             <material name="grey" />
         </visual>
 
-        <collsion>
+        <collision>
             <geometry>
                 <box size="0.1 0.1 0.02" />
             </geometry>
             <origin xyz="0 0 0.01" rpy="0 0 0" />
-        </collsion>
+        </collision>
     </link>
 
     <link name="tool_link" />
 
-    <joint name="base_shoulder_link" type="revolute">
+    <joint name="base_shoulder_joint" type="revolute">
         <parent link="base_link" />
         <child link="shoulder_link" />
         <origin xyz="0 0 0.1" rpy="0 0 0" />
@@ -130,7 +130,7 @@
         <limit effort="1000.0" velocity="1.0" lower="-3.14" upper="3.14" />
     </joint>
 
-    <joint name="shoudler_arm_link" type="revolute">
+    <joint name="shoulder_arm_joint" type="revolute">
         <parent link="shoulder_link" />
         <child link="arm_link" />
         <origin xyz="0 0 0.5" rpy="0 0 0" />
@@ -138,7 +138,7 @@
         <limit effort="1000.0" velocity="1.0" lower="0" upper="2.5" />
     </joint>
 
-    <joint name="arm_elbow_link" type="revolute">
+    <joint name="arm_elbow_joint" type="revolute">
         <parent link="arm_link" />
         <child link="elbow_link" />
         <origin xyz="0 0 0.6" rpy="0 0 0" />
@@ -146,7 +146,7 @@
         <limit effort="1000.0" velocity="1.0" lower="0" upper="2.5" />
     </joint>
 
-    <joint name="elbow_forearm_link" type="revolute">
+    <joint name="elbow_forearm_joint" type="revolute">
         <parent link="elbow_link" />
         <child link="forearm_link" />
         <origin xyz="0 0 0.1" rpy="0 0 0" />
@@ -154,7 +154,7 @@
         <limit effort="1000.0" velocity="1.0" lower="-3.14" upper="3.14" />
     </joint>
 
-    <joint name="forearm_wrist_link" type="revolute">
+    <joint name="forearm_wrist_joint" type="revolute">
         <parent link="forearm_link" />
         <child link="wrist_link" />
         <origin xyz="0 0 0.5" rpy="0 0 0" />
@@ -162,7 +162,7 @@
         <limit effort="1000.0" velocity="1.0" lower="-1.57" upper="1.57" />
     </joint>
 
-    <joint name="wrist_hand_link" type="continuous">
+    <joint name="wrist_hand_joint" type="continuous">
         <parent link="wrist_link" />
         <child link="hand_link" />
         <origin xyz="0 0 0.05" rpy="0 0 0" />

@@ -10,12 +10,12 @@ moveit_simple_controller_manager:
   arm_controller:
     type: FollowJointTrajectory
     joints:
-      - base_shoulder_link
-      - shoudler_arm_link
-      - arm_elbow_link
-      - elbow_forearm_link
-      - forearm_wrist_link
-      - wrist_hand_link
+      - base_shoulder_joint
+      - shoulder_arm_joint
+      - arm_elbow_joint
+      - elbow_forearm_joint
+      - forearm_wrist_joint
+      - wrist_hand_joint
     action_ns: follow_joint_trajectory
     default: true
 

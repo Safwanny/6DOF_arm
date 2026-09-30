@@ -8,40 +8,40 @@
                 <!-- By default, set up controllers for simulation. This won't work on real hardware -->
                 <plugin>mock_components/GenericSystem</plugin>
             </hardware>
-            <joint name="base_shoulder_link">
+            <joint name="base_shoulder_joint">
                 <command_interface name="position"/>
                 <state_interface name="position">
-                  <param name="initial_value">${initial_positions['base_shoulder_link']}</param>
+                  <param name="initial_value">${initial_positions['base_shoulder_joint']}</param>
                 </state_interface>
             </joint>
-            <joint name="shoudler_arm_link">
+            <joint name="shoulder_arm_joint">
                 <command_interface name="position"/>
                 <state_interface name="position">
-                  <param name="initial_value">${initial_positions['shoudler_arm_link']}</param>
+                  <param name="initial_value">${initial_positions['shoulder_arm_joint']}</param>
                 </state_interface>
             </joint>
-            <joint name="arm_elbow_link">
+            <joint name="arm_elbow_joint">
                 <command_interface name="position"/>
                 <state_interface name="position">
-                  <param name="initial_value">${initial_positions['arm_elbow_link']}</param>
+                  <param name="initial_value">${initial_positions['arm_elbow_joint']}</param>
                 </state_interface>
             </joint>
-            <joint name="elbow_forearm_link">
+            <joint name="elbow_forearm_joint">
                 <command_interface name="position"/>
                 <state_interface name="position">
-                  <param name="initial_value">${initial_positions['elbow_forearm_link']}</param>
+                  <param name="initial_value">${initial_positions['elbow_forearm_joint']}</param>
                 </state_interface>
             </joint>
-            <joint name="forearm_wrist_link">
+            <joint name="forearm_wrist_joint">
                 <command_interface name="position"/>
                 <state_interface name="position">
-                  <param name="initial_value">${initial_positions['forearm_wrist_link']}</param>
+                  <param name="initial_value">${initial_positions['forearm_wrist_joint']}</param>
                 </state_interface>
             </joint>
-            <joint name="wrist_hand_link">
+            <joint name="wrist_hand_joint">
                 <command_interface name="position"/>
                 <state_interface name="position">
-                  <param name="initial_value">${initial_positions['wrist_hand_link']}</param>
+                  <param name="initial_value">${initial_positions['wrist_hand_joint']}</param>
                 </state_interface>
             </joint>
             <joint name="gripper_left_finger_joint">
