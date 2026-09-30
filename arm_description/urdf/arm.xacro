@@ -16,6 +16,8 @@
             </geometry>
             <origin xyz="0 0 0.05" rpy="0 0 0" />
         </collision>
+
+        <xacro:box_inertia m="5.0" x="0.4" y="0.4" z="0.1" xyz="0 0 0.05" />
     </link>
 
     <link name="shoulder_link">
@@ -33,6 +35,8 @@
             </geometry>
             <origin xyz="0 0 0.25" rpy="0 0 0" />
         </collision>
+
+        <xacro:cylinder_inertia m="2.0" r="0.1" l="0.5" xyz="0 0 0.25" />
     </link>
 
     <link name="arm_link">
@@ -50,6 +54,8 @@
             </geometry>
             <origin xyz="0 0 0.3" rpy="0 0 0" />
         </collision>
+
+        <xacro:cylinder_inertia m="1.5" r="0.05" l="0.6" xyz="0 0 0.3" />
     </link>
 
     <link name="elbow_link">
@@ -67,6 +73,8 @@
             </geometry>
             <origin xyz="0 0 0.05" rpy="0 0 0" />
         </collision>
+
+        <xacro:cylinder_inertia m="0.3" r="0.05" l="0.1" xyz="0 0 0.05" />
     </link>
 
     <link name="forearm_link">
@@ -84,6 +92,8 @@
             </geometry>
             <origin xyz="0 0 0.25" rpy="0 0 0" />
         </collision>
+
+        <xacro:cylinder_inertia m="1.0" r="0.05" l="0.5" xyz="0 0 0.25" />
     </link>
 
     <link name="wrist_link">
@@ -101,6 +111,8 @@
             </geometry>
             <origin xyz="0 0 0.025" rpy="0 0 0" />
         </collision>
+
+        <xacro:box_inertia m="0.3" x="0.1" y="0.1" z="0.05" xyz="0 0 0.025" />
     </link>
 
     <link name="hand_link">
@@ -118,6 +130,8 @@
             </geometry>
             <origin xyz="0 0 0.01" rpy="0 0 0" />
         </collision>
+
+        <xacro:box_inertia m="0.2" x="0.1" y="0.1" z="0.02" xyz="0 0 0.01" />
     </link>
 
     <link name="tool_link" />
