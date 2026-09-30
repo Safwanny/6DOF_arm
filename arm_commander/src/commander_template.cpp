@@ -92,7 +92,7 @@ public:
     void closeGripper()
     {
         gripper_->setStartStateToCurrentState();
-        gripper_->setNamedTarget("gripper_closed");
+        gripper_->setNamedTarget("gripper_close");
         planAndExecute(gripper_);
     }
 

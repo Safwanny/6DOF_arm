@@ -22,84 +22,88 @@ This projects demostrates:
 
 
 ## Dependencies
-Ensure you are using Ubuntu 24.04 with a working ROS 2 (Humble or Jazzy) installation.
-Install the required dependencies:
+Tested on **Ubuntu 24.04 + ROS 2 Jazzy**. (The code includes `move_group_interface.hpp`, which is the Jazzy+ header, so Humble will not compile without changing it to `.h`.)
+
 ```bash
-sudo apt install ros-${ROS_DISTRO}-xacro \
-                 ros-${ROS_DISTRO}-rviz2 \
-                 ros-${ROS_DISTRO}-moveit \
-                 ros-${ROS_DISTRO}-robot-state-publisher \
+sudo apt install ros-jazzy-xacro ros-jazzy-rviz2 ros-jazzy-moveit \
+                 ros-jazzy-robot-state-publisher ros-jazzy-ros2-control \
+                 ros-jazzy-ros2-controllers ros-jazzy-example-interfaces \
+                 ros-jazzy-joint-state-publisher-gui
 ```
-Note: Follow the official MoveIt 2 installation guide to ensure proper installation.
-There may be middleware compatibility considerations for CycloneDDS.
 
-## Building the Package
-Clone the repository into your ROS 2 workspace and build:
-
+## Building
 ```bash
 cd ~/ros2_ws/src
-git clone (USING TH SSH KEY)
+git clone <this repo>
 cd ~/ros2_ws
 colcon build
 source install/setup.bash
 ```
-## Visualization
-Currently, visualization is available through RViz.
+If the build fails with `No rule to make target '/opt/ros/jazzy/lib/libfastcdr.so...'`, a ROS update changed a library under an old build cache. Clean and rebuild:
+```bash
+rm -rf build/arm_interfaces install/arm_interfaces build/arm_commander install/arm_commander && colcon build
+```
 
-View the robot model:
+## Step-by-step: see it working
+Open 3 terminals. In every terminal run:
+```bash
+cd ~/ros2_ws && source install/setup.bash
+```
+
+**1. View the model only (optional)**
 ```bash
 ros2 launch arm_description display.launch.xml
 ```
+Use the joint slider GUI to move each joint.
 
-Launch the manipulator with MoveIt configuration:
+**2. Launch the arm with MoveIt** (terminal 1)
 ```bash
 ros2 launch arm_bringup arm.launch.xml
 ```
-After launching, add the MoveIt MotionPlanning plugin in RViz:
-1. Click Add (bottom-left corner in RViz)
-2. Select MotionPlanning (under moveit_ros_visualization)
+This starts robot_state_publisher, ros2_control (mock hardware), the `joint_state_broadcaster`, `arm_controller` and `gripper_controller`, `move_group`, and RViz.
 
-## Controlling the arm
-there are 2 ways to control the robot:
-
-### 1. With the test_moveit.cpp file
-Step 1: Launch the main bringup file
+Check the controllers are up (terminal 2):
 ```bash
-ros2 launch arm_bringup arm.launch.xml
+ros2 control list_controllers
 ```
-Step 2: In another terminal, run the MoveIt test node:
+All three should be `active`.
+
+To plan interactively in RViz: **Add → moveit_ros_visualization → MotionPlanning**, drag the interactive marker, then **Plan & Execute**.
+
+**3. Run the scripted demo** (terminal 2)
 ```bash
 ros2 run arm_commander test_moveit
 ```
-You can edit test_moveit.cpp to experiment with different types of motion:
-- Named Goals
-- Joint Goals
-- Pose Goals
-- Cartesian Paths
-Each of these methods is demonstrated within the file.
+The arm moves to a pose goal (x=0.7, z=0.4, gripper pointing down), then follows a Cartesian path (down 0.2 m, sideways 0.2 m, back). Named and joint goal examples are in [test_moveit.cpp](arm_commander/src/test_moveit.cpp); uncomment a section to try it.
 
-### 2. Controlling the arm with C++ API
-You can also control the manipulator by publishing messages to a topic.
-
-Step 1: Launch the bringup:
-```bash
-ros2 launch arm_bringup arm.launch.xml
-```
-Step 2: Run the command interface:
+**4. Control the arm via topics** (terminal 2, then send commands from terminal 3)
 ```bash
 ros2 run arm_commander commander
 ```
-Step 3: Send pose commands:
+Pose goal (`cartesian_path: true` moves in a straight line instead):
 ```bash
-ros2 topic pub -1 /pose_command arm_interafaces/msg/PoseCommand "{x: 0.7, y: 0.0, z: 0.4, roll: 3.14, pitch: 0.0, yaw: 0.0, cartesian_path: false}"
+ros2 topic pub -1 /pose_command arm_interfaces/msg/PoseCommand "{x: 0.7, y: 0.0, z: 0.4, roll: 3.14, pitch: 0.0, yaw: 0.0, cartesian_path: false}"
 ```
-Step 4: Control the gripper:
+Joint goal (6 values, radians, in order base → wrist):
 ```bash
-ros2 topic pub -1 /open_gripper example_interfaces/msg/bool "{data: false}"
+ros2 topic pub -1 /joint_command example_interfaces/msg/Float64MultiArray "{data: [0.5, 0.3, 0.2, 0.0, 0.4, 0.0]}"
 ```
-true → Open gripper
-false → Close gripper
+Gripper (`true` = open, `false` = close):
+```bash
+ros2 topic pub -1 /open_gripper example_interfaces/msg/Bool "{data: false}"
+```
+Verify the motion:
+```bash
+ros2 topic echo --once /joint_states
+```
 
-make sure that all terminal are run seperately and rviz window is open side by side.
+## Named poses (from the SRDF)
+| Group   | Names                                           |
+| ------- | ----------------------------------------------- |
+| arm     | `home`, `pose1`, `pose2`                        |
+| gripper | `gripper_open`, `gripper_half_open`, `gripper_close` |
 
-
+## Known limitations
+- Hardware is `mock_components` only: nothing is simulated physically (no Gazebo, no gravity/contacts).
+- If a pose goal is unreachable or a Cartesian path is <100% feasible, the commander silently does nothing — watch the `move_group` log in terminal 1.
+- Commands block the commander's callback while planning/executing; a new command sent mid-motion is queued, not preempting.
