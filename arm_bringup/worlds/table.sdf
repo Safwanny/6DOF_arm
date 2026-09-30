@@ -68,5 +68,40 @@
         </visual>
       </link>
     </model>
+
+    <!-- Depth camera on a stand across the table, looking down at it.
+         Pose must match the camera_link static TF in arm_gz.launch.xml -->
+    <model name="camera">
+      <static>true</static>
+      <pose>1.8 0 1.8 0 0.89 3.14159</pose>
+      <link name="link">
+        <visual name="body">
+          <geometry><box><size>0.05 0.1 0.04</size></box></geometry>
+          <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+        </visual>
+        <sensor name="rgbd_camera" type="rgbd_camera">
+          <topic>camera</topic>
+          <gz_frame_id>camera_link</gz_frame_id>
+          <update_rate>10</update_rate>
+          <always_on>true</always_on>
+          <camera>
+            <horizontal_fov>1.0</horizontal_fov>
+            <image><width>640</width><height>480</height></image>
+            <clip><near>0.1</near><far>5.0</far></clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+    <!-- Stand sits just behind the camera and below it, so it stays out of the view -->
+    <model name="camera_stand">
+      <static>true</static>
+      <pose>1.86 0 0.87 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.015</radius><length>1.74</length></cylinder></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
   </world>
 </sdf>

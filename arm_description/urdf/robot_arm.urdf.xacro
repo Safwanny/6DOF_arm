@@ -16,12 +16,14 @@
     </joint>
 
     <xacro:if value="$(arg sim)">
-        <!-- Bolt the base to the ground (sim only, MoveIt adds its own world joint from the SRDF) -->
-        <link name="world" />
-        <joint name="world_base_joint" type="fixed">
-            <parent link="world" />
-            <child link="base_link" />
-        </joint>
+        <!-- Bolt the base to the ground inside Gazebo only, so the ROS URDF keeps base_link
+             as root and still matches the SRDF virtual joint -->
+        <gazebo>
+            <joint name="world_base_joint" type="fixed">
+                <parent>world</parent>
+                <child>base_link</child>
+            </joint>
+        </gazebo>
 
         <!-- Grippy fingers so the box doesn't slip out -->
         <gazebo reference="gripper_left_finger_link">

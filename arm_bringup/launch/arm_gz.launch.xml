@@ -4,7 +4,7 @@
     <let name="world_path"
          value="$(find-pkg-share arm_bringup)/worlds/table.sdf"/>
     <let name="rviz_config_path"
-         value="$(find-pkg-share arm_description)/rviz/urdf_config.rviz"/>
+         value="$(find-pkg-share arm_bringup)/config/arm_gz.rviz"/>
 
     <!-- Every node below (including move_group) runs on Gazebo's clock -->
     <set_parameter name="use_sim_time" value="true"/>
@@ -22,7 +22,16 @@
     <node pkg="ros_gz_sim" exec="create" args="-topic robot_description -name robot_arm" />
 
     <node pkg="ros_gz_bridge" exec="parameter_bridge"
-          args="/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock" />
+          args="/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock
+                /camera/image@sensor_msgs/msg/Image[gz.msgs.Image
+                /camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image
+                /camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo
+                /camera/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked" />
+
+    <!-- Same pose as the camera model in table.sdf -->
+    <node pkg="tf2_ros" exec="static_transform_publisher"
+          args="--x 1.8 --y 0 --z 1.8 --roll 0 --pitch 0.89 --yaw 3.14159
+                --frame-id base_link --child-frame-id camera_link" />
 
     <node pkg="controller_manager" exec="spawner"
           args="joint_state_broadcaster --controller-manager-timeout 60" />
@@ -33,6 +42,11 @@
 
     <include file="$(find-pkg-share arm_moveit_config)/launch/move_group.launch.py" />
 
+    <!-- Camera and depth images in their own windows -->
+    <node pkg="rqt_image_view" exec="rqt_image_view" args="/camera/image" />
+    <node pkg="rqt_image_view" exec="rqt_image_view" args="/camera/depth_image" />
+
+    <!-- RViz shows the robot, planning scene and camera point cloud -->
     <node pkg="rviz2" exec="rviz2" output="screen"
           args="-d $(var rviz_config_path)" />
 </launch>
