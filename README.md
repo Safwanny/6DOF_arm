@@ -4,7 +4,7 @@ Manipulator Arm Using MoveIt for Path Planning
 This project showcases the development of a 6-DOF robotic manipulator built from scratch and integrated with the MoveIt 2 stack for motion planning. It also includes a C++ API interface for sending joint and pose commands, demonstrating a complete learning path in robot development with MoveIt.
 
 ## Overview
-This projects demostrates:
+This project demonstrates:
 - Defining a manipulator arm using URDF/Xacro
 - Integrating the MoveIt 2 package for motion planning
 - Using the C++ API to send commands to the arm for joint and pose goals
