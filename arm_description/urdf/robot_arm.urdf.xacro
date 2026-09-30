@@ -16,7 +16,7 @@
     </joint>
 
     <xacro:if value="$(arg sim)">
-        <!-- Bolt the base to the ground. Sim only: MoveIt adds its own world joint from the SRDF -->
+        <!-- Bolt the base to the ground (sim only, MoveIt adds its own world joint from the SRDF) -->
         <link name="world" />
         <joint name="world_base_joint" type="fixed">
             <parent link="world" />
