@@ -23,6 +23,16 @@
             <child link="base_link" />
         </joint>
 
+        <!-- Grippy fingers so the box doesn't slip out -->
+        <gazebo reference="gripper_left_finger_link">
+            <mu1>1.5</mu1>
+            <mu2>1.5</mu2>
+        </gazebo>
+        <gazebo reference="gripper_right_finger_link">
+            <mu1>1.5</mu1>
+            <mu2>1.5</mu2>
+        </gazebo>
+
         <gazebo>
             <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
                 <parameters>$(find arm_bringup)/config/ros2_controllers.yaml</parameters>

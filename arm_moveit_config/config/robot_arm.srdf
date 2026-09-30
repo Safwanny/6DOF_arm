@@ -55,6 +55,10 @@
     <group_state name="gripper_close" group="gripper">
         <joint name="gripper_left_finger_joint" value="0.06"/>
     </group_state>
+    <!-- Finger gap = 0.12 - 2*value: 0.042 squeezes the 4 cm box by 2 mm per side -->
+    <group_state name="gripper_grasp" group="gripper">
+        <joint name="gripper_left_finger_joint" value="0.042"/>
+    </group_state>
     <group_state name="gripper_half_open" group="gripper">
         <joint name="gripper_left_finger_joint" value="0.03"/>
     </group_state>

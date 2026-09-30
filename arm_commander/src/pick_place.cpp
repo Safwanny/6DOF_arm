@@ -17,6 +17,8 @@ const double PICK_XY[2] = {0.6, -0.2};
 const double PLACE_XY[2] = {0.6, 0.2};
 // Object centre along tool_link z when grasped: fingers span 0.02-0.10 m past tool_link
 const double GRASP_DEPTH = 0.075;
+// SRDF gripper state that closes just onto the box (fully closing would crush it in Gazebo)
+const std::string GRASP_STATE = "gripper_grasp";
 
 moveit_msgs::msg::CollisionObject makeBox(const std::string &id, double sx, double sy, double sz,
                                           double x, double y, double z)
@@ -97,12 +99,14 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node)
         approach->setDirection(tool_forward);
         pick->insert(std::move(approach));
 
-        // Sample grasps around the object's vertical axis, tool pointing down
+        // Sample grasps around the object's vertical axis, tool pointing down.
+        // 90 deg steps keep the fingers flat on the box faces; a diagonal grasp pinches the
+        // corners (5.7 cm across) and squirts the box out in Gazebo.
         auto grasp = std::make_unique<mtc::stages::GenerateGraspPose>("generate grasp pose");
         grasp->properties().configureInitFrom(mtc::Stage::PARENT);
         grasp->setPreGraspPose("gripper_open");
         grasp->setObject("object");
-        grasp->setAngleDelta(M_PI / 12);
+        grasp->setAngleDelta(M_PI / 2);
         grasp->setMonitoredStage(current_ptr);
 
         Eigen::Isometry3d grasp_frame = Eigen::Isometry3d::Identity();
@@ -123,7 +127,7 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node)
 
         auto close_hand = std::make_unique<mtc::stages::MoveTo>("close hand", interpolation_planner);
         close_hand->setGroup(HAND);
-        close_hand->setGoal("gripper_close");
+        close_hand->setGoal(GRASP_STATE);
         pick->insert(std::move(close_hand));
 
         auto attach = std::make_unique<mtc::stages::ModifyPlanningScene>("attach object");
