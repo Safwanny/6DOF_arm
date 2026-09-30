@@ -1,6 +1,9 @@
 <?xml version="1.0"?>
 <robot name="robot_arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+    <!-- sim:=true runs on Gazebo (gz_ros2_control); default is mock hardware -->
+    <xacro:arg name="sim" default="false" />
+
     <xacro:include filename="common_properties.xacro" />
     <xacro:include filename="arm.xacro" />
     <xacro:include filename="gripper.xacro" />
@@ -11,5 +14,20 @@
         <child link="gripper_base_link" />
         <origin xyz="0 0 0" rpy="0 0 0" />
     </joint>
+
+    <xacro:if value="$(arg sim)">
+        <!-- Bolt the base to the ground. Sim only: MoveIt adds its own world joint from the SRDF -->
+        <link name="world" />
+        <joint name="world_base_joint" type="fixed">
+            <parent link="world" />
+            <child link="base_link" />
+        </joint>
+
+        <gazebo>
+            <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+                <parameters>$(find arm_bringup)/config/ros2_controllers.yaml</parameters>
+            </plugin>
+        </gazebo>
+    </xacro:if>
 
 </robot>

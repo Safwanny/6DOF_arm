@@ -3,8 +3,12 @@
 
   <ros2_control name="Arm" type="system">
       <hardware>
-          <!-- By default, set up controllers for simulation. This won't work on real hardware -->
-          <plugin>mock_components/GenericSystem</plugin>
+          <xacro:if value="$(arg sim)">
+              <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+          </xacro:if>
+          <xacro:unless value="$(arg sim)">
+              <plugin>mock_components/GenericSystem</plugin>
+          </xacro:unless>
       </hardware>
       <joint name="base_shoulder_joint">
           <command_interface name="position"/>
@@ -48,7 +52,12 @@
             <param name="initial_value">0.0</param>
           </state_interface>
       </joint>
-      
+      <xacro:if value="$(arg sim)">
+          <!-- Mimics the left finger; Gazebo moves it, ros2_control only reads it -->
+          <joint name="gripper_right_finger_joint">
+              <state_interface name="position"/>
+          </joint>
+      </xacro:if>
   </ros2_control>
 
 </robot>
