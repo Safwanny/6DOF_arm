@@ -101,6 +101,12 @@
           <geometry><cylinder><radius>0.015</radius><length>1.74</length></cylinder></geometry>
           <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
         </visual>
+        <!-- Bracket from the stand top to the back of the camera (behind the lens, out of view) -->
+        <visual name="bracket">
+          <pose>-0.015 0 0.89 0 0 0</pose>
+          <geometry><box><size>0.07 0.03 0.05</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
       </link>
     </model>
   </world>

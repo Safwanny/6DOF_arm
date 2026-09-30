@@ -11,6 +11,8 @@
 
     <include file="$(find-pkg-share ros_gz_sim)/launch/gz_sim.launch.py">
         <arg name="gz_args" value="-r $(var world_path)"/>
+        <!-- Closing Gazebo, RViz or the camera window shuts everything down -->
+        <arg name="on_exit_shutdown" value="true"/>
     </include>
 
     <node pkg="robot_state_publisher" exec="robot_state_publisher">
@@ -42,11 +44,10 @@
 
     <include file="$(find-pkg-share arm_moveit_config)/launch/move_group.launch.py" />
 
-    <!-- Camera and depth images in their own windows -->
-    <node pkg="rqt_image_view" exec="rqt_image_view" args="/camera/image" />
-    <node pkg="rqt_image_view" exec="rqt_image_view" args="/camera/depth_image" />
+    <!-- Colour and depth images side by side in their own window -->
+    <node pkg="arm_bringup" exec="camera_view.py" on_exit="shutdown" />
 
     <!-- RViz shows the robot, planning scene and camera point cloud -->
-    <node pkg="rviz2" exec="rviz2" output="screen"
+    <node pkg="rviz2" exec="rviz2" output="screen" on_exit="shutdown"
           args="-d $(var rviz_config_path)" />
 </launch>
