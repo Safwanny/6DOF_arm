@@ -10,12 +10,13 @@ This project demonstrates:
 - Using the C++ API to send commands to the arm for joint and pose goals
 - Implementing a custom ROS 2 interface (PoseCommand) for communication between nodes
 - A pick-and-place task built with MoveIt Task Constructor (MTC)
+- Gazebo (Harmonic) simulation with physics, a real friction grasp and a depth camera
 
 ## Repository Structure
 
 | Package               | Description                                                                |
 | --------------------- | -------------------------------------------------------------------------- |
-| **arm_bringup**       | Contains launch files for starting the nodes and RViz visualization        |
+| **arm_bringup**       | Launch files (mock and Gazebo), Gazebo world, RViz configs, camera viewer  |
 | **arm_commander**     | Test, topic commander and pick-and-place nodes for controlling the robot   |
 | **arm_description**   | Contains URDF/Xacro models and RViz configuration files                    |
 | **arm_interfaces**    | Defines the custom ROS 2 interface `PoseCommand`                           |
@@ -32,7 +33,9 @@ sudo apt install ros-jazzy-xacro ros-jazzy-rviz2 ros-jazzy-moveit \
                  ros-jazzy-joint-state-publisher-gui \
                  ros-jazzy-moveit-task-constructor-core \
                  ros-jazzy-moveit-task-constructor-capabilities \
-                 ros-jazzy-moveit-task-constructor-visualization
+                 ros-jazzy-moveit-task-constructor-visualization \
+                 ros-jazzy-ros-gz ros-jazzy-gz-ros2-control \
+                 ros-jazzy-cv-bridge python3-opencv
 ```
 
 ## Building
@@ -111,14 +114,56 @@ To see the table and box in RViz, add the **MotionPlanning** display (see step 2
 
 The box and table positions are constants at the top of [pick_place.cpp](arm_commander/src/pick_place.cpp). If you move them out of reach, the `grasp pose IK` or `place pose IK` stage fails.
 
+## Gazebo simulation
+The same arm in Gazebo Harmonic, with gravity, contacts and a depth camera. Open 2 terminals and in each run `cd ~/ros2_ws && source install/setup.bash`.
+
+**1. Start the simulation** (terminal 1)
+```bash
+ros2 launch arm_bringup arm_gz.launch.xml
+```
+After about 30 s, three windows are open:
+- **Gazebo**: the arm bolted to the floor, a table with a red box, and a depth camera on a stand behind the table.
+- **RViz**: the robot, the planning scene (table and box) and the camera's point cloud.
+- **Camera window**: colour image (left) and depth image (right, red = near, blue = far).
+
+Closing any of these windows, or Ctrl+C in terminal 1, shuts the whole simulation down.
+
+**2. Check the controllers** (terminal 2): all three should be `active`
+```bash
+ros2 control list_controllers
+```
+
+**3. Pick and place** (terminal 2)
+```bash
+ros2 launch arm_bringup pick_place.launch.py use_sim_time:=true
+```
+The fingers physically grip the box, carry it 40 cm and stand it on the table. Check where it ended up (should be near `0.6 0.2 0.2`):
+```bash
+gz model -m box -p
+```
+To run it again, put the box back first:
+```bash
+gz service -s /world/table_world/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 2000 --req 'name: "box", position: {x: 0.6, y: -0.2, z: 0.2}, orientation: {w: 1}'
+```
+
+**Other nodes on the simulation** need sim time, e.g.:
+```bash
+ros2 run arm_commander test_moveit --ros-args -p use_sim_time:=true
+```
+
+Camera topics: `/camera/image`, `/camera/depth_image`, `/camera/camera_info`, `/camera/points` (frame `camera_link`).
+
+How it fits together: `robot_arm.urdf.xacro` takes `sim:=true` to swap mock hardware for `gz_ros2_control` and bolt the base to the Gazebo world; the world ([table.sdf](arm_bringup/worlds/table.sdf)) matches the table/box constants in [pick_place.cpp](arm_commander/src/pick_place.cpp). If you move the camera in the world file, update the `camera_link` transform in [arm_gz.launch.xml](arm_bringup/launch/arm_gz.launch.xml) to match.
+
 ## Named poses (from the SRDF)
 | Group   | Names                                           |
 | ------- | ----------------------------------------------- |
 | arm     | `home`, `pose1`, `pose2`                        |
-| gripper | `gripper_open`, `gripper_half_open`, `gripper_close` |
+| gripper | `gripper_open`, `gripper_half_open`, `gripper_close`, `gripper_grasp` (closes onto the 4 cm box) |
 
 ## Known limitations
-- Hardware is `mock_components` only: nothing is simulated physically (no Gazebo, no gravity/contacts).
-- Pick and place grasps by attaching the box to `tool_link` in the planning scene; the fingers never actually squeeze it.
+- In mock mode (`arm.launch.xml`) nothing is physical: pick and place "grasps" by attaching the box in the planning scene. Use the Gazebo launch for a real grasp.
+- Pick and place uses the hard-coded box position; it does not use the camera yet.
+- Grasps are limited to 90° steps around the box so the fingers land flat on its faces; a diagonal grasp squeezes the corners and flicks the box out in Gazebo.
 - If a pose goal is unreachable or a Cartesian path is <100% feasible, the commander silently does nothing — watch the `move_group` log in terminal 1.
 - Commands block the commander's callback while planning/executing; a new command sent mid-motion is queued, not preempting.
