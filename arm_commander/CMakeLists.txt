@@ -12,6 +12,7 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(example_interfaces REQUIRED)
 find_package(arm_interfaces REQUIRED)
 find_package(moveit_task_constructor_core REQUIRED)
+find_package(tf2_msgs REQUIRED)
 
 add_executable(test_moveit src/test_moveit.cpp)
 ament_target_dependencies(test_moveit rclcpp moveit_ros_planning_interface)
@@ -20,7 +21,7 @@ add_executable(commander src/commander_template.cpp)
 ament_target_dependencies(commander rclcpp moveit_ros_planning_interface example_interfaces arm_interfaces)
 
 add_executable(pick_place src/pick_place.cpp)
-ament_target_dependencies(pick_place rclcpp moveit_ros_planning_interface moveit_task_constructor_core)
+ament_target_dependencies(pick_place rclcpp moveit_ros_planning_interface moveit_task_constructor_core tf2_msgs)
 
 install(TARGETS
   test_moveit
