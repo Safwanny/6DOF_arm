@@ -33,6 +33,15 @@
         <joint name="shoulder_arm_joint" value="0"/>
         <joint name="wrist_hand_joint" value="0"/>
     </group_state>
+    <!-- Tool pointing down 35 cm above the table centre (x 0.6, z 0.5): where pick_place waits between cubes -->
+    <group_state name="ready" group="arm">
+        <joint name="base_shoulder_joint" value="0"/>
+        <joint name="shoulder_arm_joint" value="0.5743"/>
+        <joint name="arm_elbow_joint" value="2.0930"/>
+        <joint name="elbow_forearm_joint" value="0"/>
+        <joint name="forearm_wrist_joint" value="0.4744"/>
+        <joint name="wrist_hand_joint" value="0"/>
+    </group_state>
     <group_state name="pose1" group="arm">
         <joint name="arm_elbow_joint" value="1.1694"/>
         <joint name="base_shoulder_joint" value="0.5065"/>
@@ -51,12 +60,21 @@
     </group_state>
     <group_state name="gripper_open" group="gripper">
         <joint name="gripper_left_finger_joint" value="0"/>
+        <joint name="gripper_right_finger_joint" value="0"/>
     </group_state>
     <group_state name="gripper_close" group="gripper">
         <joint name="gripper_left_finger_joint" value="0.06"/>
+        <joint name="gripper_right_finger_joint" value="0.06"/>
+    </group_state>
+    <!-- Finger gap = 0.12 - 2*value. 0.05 aims 1 cm inside the 4 cm cube on each side: in Gazebo the
+         force-controlled fingers stop on the cube and squeeze with the controller's max force -->
+    <group_state name="gripper_grasp" group="gripper">
+        <joint name="gripper_left_finger_joint" value="0.05"/>
+        <joint name="gripper_right_finger_joint" value="0.05"/>
     </group_state>
     <group_state name="gripper_half_open" group="gripper">
         <joint name="gripper_left_finger_joint" value="0.03"/>
+        <joint name="gripper_right_finger_joint" value="0.03"/>
     </group_state>
     <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
     <end_effector name="gripper" parent_link="tool_link" group="gripper" parent_group="arm"/>

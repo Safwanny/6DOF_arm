@@ -1,4 +1,5 @@
-# This config file is used by ros2_control
+# ros2_control config for Gazebo (arm_gz.launch.xml). Same as ros2_controllers.yaml except
+# the gripper, which commands finger force
 controller_manager:
   ros__parameters:
     update_rate: 100  # Hz
@@ -35,7 +36,14 @@ gripper_controller:
       - gripper_left_finger_joint
       - gripper_right_finger_joint
     command_interfaces:
-      - position
+      - effort
     state_interfaces:
       - position
+      - velocity
+    # Force = p * position error, capped at FINGER_FORCE in gripper.xacro. gripper_grasp aims
+    # 1 cm inside the cube, so a closed finger pushes p * 0.01 = 15 N, i.e. the cap.
+    # d damps free motion; keep p * 0.01^2 / 0.2 kg and d * 0.01 / 0.2 kg below 1 (100 Hz loop)
+    gains:
+      gripper_left_finger_joint: {p: 1500.0, d: 15.0, i: 0.0}
+      gripper_right_finger_joint: {p: 1500.0, d: 15.0, i: 0.0}
     allow_nonzero_velocity_at_trajectory_end: true

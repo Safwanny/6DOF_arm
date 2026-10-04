@@ -9,8 +9,10 @@ endif()
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY launch config
+  DIRECTORY launch config worlds
   DESTINATION share/${PROJECT_NAME}
 )
+
+install(PROGRAMS scripts/camera_view.py scripts/spawn_cubes.py DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

@@ -1,6 +1,9 @@
 <?xml version="1.0"?>
 <robot name="robot_arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+    <!-- sim:=true runs on Gazebo (gz_ros2_control); default is mock hardware -->
+    <xacro:arg name="sim" default="false" />
+
     <xacro:include filename="common_properties.xacro" />
     <xacro:include filename="arm.xacro" />
     <xacro:include filename="gripper.xacro" />
@@ -11,5 +14,32 @@
         <child link="gripper_base_link" />
         <origin xyz="0 0 0" rpy="0 0 0" />
     </joint>
+
+    <xacro:if value="$(arg sim)">
+        <!-- Bolt the base to the ground inside Gazebo only, so the ROS URDF keeps base_link
+             as root and still matches the SRDF virtual joint -->
+        <gazebo>
+            <joint name="world_base_joint" type="fixed">
+                <parent>world</parent>
+                <child>base_link</child>
+            </joint>
+        </gazebo>
+
+        <!-- Grippy fingers so the box doesn't slip out -->
+        <gazebo reference="gripper_left_finger_link">
+            <mu1>2.0</mu1>
+            <mu2>2.0</mu2>
+        </gazebo>
+        <gazebo reference="gripper_right_finger_link">
+            <mu1>2.0</mu1>
+            <mu2>2.0</mu2>
+        </gazebo>
+
+        <gazebo>
+            <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+                <parameters>$(find arm_bringup)/config/ros2_controllers_gz.yaml</parameters>
+            </plugin>
+        </gazebo>
+    </xacro:if>
 
 </robot>
