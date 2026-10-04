@@ -108,11 +108,16 @@ ros2 topic echo --once /joint_states
 ```bash
 ros2 launch arm_bringup pick_place.launch.py
 ```
-The node adds a table and a 4×4×10 cm box to the planning scene, then MTC plans and runs the whole task: open gripper → move above the box → lower → close → lift → move → lower onto the table 40 cm to the side → open → retreat → home. It logs `Pick and place done` on success; on failure it prints which stage found 0 solutions. Stop it with Ctrl+C. Running it again puts the box back at the start.
+The node adds a table, a 4×4×10 cm box and a shallow 2×3 tray to the planning scene, then MTC plans and runs the whole task: open gripper → move above the box → lower → close → lift → move above a tray slot → lower straight into it → half open → retreat → home. It logs `Pick and place done` on success; on failure it prints which stage found 0 solutions. Stop it with Ctrl+C. Running it again puts the box back at the start.
+
+Pick the tray slot (0-5, default 0) with `slot:=N`. Slot 0 is the corner nearest the arm on the box side, slots count along y first: 0-2 are the near row (x = 0.555), 3-5 the far row (x = 0.645), at y = 0.11, 0.20, 0.29:
+```bash
+ros2 launch arm_bringup pick_place.launch.py slot:=4
+```
 
 To see the table and box in RViz, add the **MotionPlanning** display (see step 2). To step through each stage, also add **Add → moveit_task_constructor_visualization → Motion Planning Tasks**.
 
-The box and table positions are constants at the top of [pick_place.cpp](arm_commander/src/pick_place.cpp). If you move them out of reach, the `grasp pose IK` or `place pose IK` stage fails.
+The box, table and tray positions are constants at the top of [pick_place.cpp](arm_commander/src/pick_place.cpp). If you move them out of reach, the `grasp pose IK` or `place pose IK` stage fails.
 
 ## Gazebo simulation
 The same arm in Gazebo Harmonic, with gravity, contacts and a depth camera. Open 2 terminals and in each run `cd ~/ros2_ws && source install/setup.bash`.
@@ -122,8 +127,8 @@ The same arm in Gazebo Harmonic, with gravity, contacts and a depth camera. Open
 ros2 launch arm_bringup arm_gz.launch.xml
 ```
 After about 30 s, three windows are open:
-- **Gazebo**: the arm bolted to the floor, a table with a red box, and a depth camera on a stand behind the table.
-- **RViz**: the robot, the planning scene (table and box) and the camera's point cloud.
+- **Gazebo**: the arm bolted to the floor, a table with a red box and a grey tray, and a depth camera on a stand behind the table.
+- **RViz**: the robot, the planning scene (table, box and tray) and the camera's point cloud.
 - **Camera window**: colour image (left) and depth image (right, red = near, blue = far).
 
 Closing any of these windows, or Ctrl+C in terminal 1, shuts the whole simulation down.
@@ -137,7 +142,7 @@ ros2 control list_controllers
 ```bash
 ros2 launch arm_bringup pick_place.launch.py use_sim_time:=true
 ```
-The fingers physically grip the box, carry it 40 cm and stand it on the table. Check where it ended up (should be near `0.6 0.2 0.2`):
+The fingers physically grip the box, carry it to the tray and stand it in the chosen slot. Check where it ended up (slot 0 should be near `0.555 0.11 0.205`, upright):
 ```bash
 gz model -m box -p
 ```
@@ -164,6 +169,7 @@ How it fits together: `robot_arm.urdf.xacro` takes `sim:=true` to swap mock hard
 ## Known limitations
 - In mock mode (`arm.launch.xml`) nothing is physical: pick and place "grasps" by attaching the box in the planning scene. Use the Gazebo launch for a real grasp.
 - Pick and place uses the hard-coded box position; it does not use the camera yet.
+- The tray has a 9 cm slot pitch because the half-open fingers reach 5 cm from the box centre; its 1.5 cm walls sit below the finger tips. If you change the tray in [table.sdf](arm_bringup/worlds/table.sdf), update the `TRAY_*` constants in pick_place.cpp to match.
 - Grasps are limited to 90° steps around the box so the fingers land flat on its faces; a diagonal grasp squeezes the corners and flicks the box out in Gazebo.
 - If a pose goal is unreachable or a Cartesian path is <100% feasible, the commander silently does nothing — watch the `move_group` log in terminal 1.
 - Commands block the commander's callback while planning/executing; a new command sent mid-motion is queued, not preempting.

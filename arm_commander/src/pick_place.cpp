@@ -1,4 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
+#include <array>
 #include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include <moveit/task_constructor/task.h>
 #include <moveit/task_constructor/solvers.h>
@@ -14,7 +15,19 @@ const std::string HAND_FRAME = "tool_link";
 const double TABLE_TOP = 0.15;
 const double OBJECT_SIZE[3] = {0.04, 0.04, 0.10};
 const double PICK_XY[2] = {0.6, -0.2};
-const double PLACE_XY[2] = {0.6, 0.2};
+// Shallow tray with 2x3 slots, centred on the right half of the table (matches table.sdf).
+// 9 cm pitch leaves 2 cm between a half-open finger and the next box; walls stay below the
+// finger tips (2.5 cm above the box bottom) so the fingers pass over them.
+const double TRAY_XY[2] = {0.6, 0.2};
+const double TRAY_INNER[2] = {0.18, 0.27};
+const double TRAY_WALL = 0.01;     // thickness
+const double TRAY_FLOOR = 0.005;   // thickness
+const double TRAY_HEIGHT = 0.02;   // floor bottom to wall top
+const double SLOT_PITCH = 0.09;
+const int SLOT_ROWS = 2;  // along x
+const int SLOT_COLS = 3;  // along y
+// Release this far above the tray floor so the box settles instead of being pushed into it
+const double RELEASE_GAP = 0.003;
 // Object centre along tool_link z when grasped: fingers span 0.02-0.10 m past tool_link
 const double GRASP_DEPTH = 0.075;
 // SRDF gripper state that closes just onto the box (fully closing would crush it in Gazebo)
@@ -37,17 +50,66 @@ moveit_msgs::msg::CollisionObject makeBox(const std::string &id, double sx, doub
     return obj;
 }
 
+// Floor plus 4 walls, all as primitives of one object
+moveit_msgs::msg::CollisionObject makeTray()
+{
+    const double ox = TRAY_INNER[0] + 2 * TRAY_WALL, oy = TRAY_INNER[1] + 2 * TRAY_WALL;
+    const double wall_x = (TRAY_INNER[0] + TRAY_WALL) / 2, wall_y = (TRAY_INNER[1] + TRAY_WALL) / 2;
+    const double parts[5][6] = {  // size xyz, centre xyz (relative to tray centre on the table)
+        {ox, oy, TRAY_FLOOR, 0, 0, TRAY_FLOOR / 2},
+        {TRAY_WALL, oy, TRAY_HEIGHT, -wall_x, 0, TRAY_HEIGHT / 2},
+        {TRAY_WALL, oy, TRAY_HEIGHT, wall_x, 0, TRAY_HEIGHT / 2},
+        {ox, TRAY_WALL, TRAY_HEIGHT, 0, -wall_y, TRAY_HEIGHT / 2},
+        {ox, TRAY_WALL, TRAY_HEIGHT, 0, wall_y, TRAY_HEIGHT / 2},
+    };
+    moveit_msgs::msg::CollisionObject tray;
+    tray.id = "tray";
+    tray.header.frame_id = "base_link";
+    tray.pose.position.x = TRAY_XY[0];
+    tray.pose.position.y = TRAY_XY[1];
+    tray.pose.position.z = TABLE_TOP;
+    tray.pose.orientation.w = 1.0;
+    for (const auto &p : parts) {
+        shape_msgs::msg::SolidPrimitive prim;
+        prim.type = prim.BOX;
+        prim.dimensions = {p[0], p[1], p[2]};
+        geometry_msgs::msg::Pose pose;
+        pose.position.x = p[3];
+        pose.position.y = p[4];
+        pose.position.z = p[5];
+        pose.orientation.w = 1.0;
+        tray.primitives.push_back(prim);
+        tray.primitive_poses.push_back(pose);
+    }
+    tray.operation = tray.ADD;
+    return tray;
+}
+
+// Slot centre in base_link, slot 0 is the -x, -y corner, counting along y first
+std::array<double, 2> slotXY(int slot)
+{
+    const int row = slot / SLOT_COLS, col = slot % SLOT_COLS;
+    return {TRAY_XY[0] + (row - (SLOT_ROWS - 1) / 2.0) * SLOT_PITCH,
+            TRAY_XY[1] + (col - (SLOT_COLS - 1) / 2.0) * SLOT_PITCH};
+}
+
 void setupPlanningScene()
 {
     moveit::planning_interface::PlanningSceneInterface psi;
+    // A run stopped mid-task leaves the box attached to the hand; drop it so ADD below takes effect
+    moveit_msgs::msg::AttachedCollisionObject detach;
+    detach.object.id = "object";
+    detach.object.operation = detach.object.REMOVE;
+    psi.applyAttachedCollisionObject(detach);
     psi.applyCollisionObjects({
         makeBox("table", 0.4, 0.8, TABLE_TOP, 0.65, 0.0, TABLE_TOP / 2),
+        makeTray(),
         makeBox("object", OBJECT_SIZE[0], OBJECT_SIZE[1], OBJECT_SIZE[2],
                 PICK_XY[0], PICK_XY[1], TABLE_TOP + OBJECT_SIZE[2] / 2),
     });
 }
 
-mtc::Task createTask(const rclcpp::Node::SharedPtr &node)
+mtc::Task createTask(const rclcpp::Node::SharedPtr &node, int slot)
 {
     mtc::Task task;
     task.stages()->setName("pick and place");
@@ -157,14 +219,25 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node)
         task.properties().exposeTo(place->properties(), {"eef", "group", "ik_frame"});
         place->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group", "ik_frame"});
 
+        // Come straight down into the slot so the box never swings over the tray walls
+        auto lower = std::make_unique<mtc::stages::MoveRelative>("lower object", cartesian_planner);
+        lower->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
+        lower->setMinMaxDistance(0.03, 0.1);
+        lower->setIKFrame(HAND_FRAME);
+        geometry_msgs::msg::Vector3Stamped world_down = world_up;
+        world_down.vector.z = -1.0;
+        lower->setDirection(world_down);
+        place->insert(std::move(lower));
+
         auto place_pose = std::make_unique<mtc::stages::GeneratePlacePose>("generate place pose");
         place_pose->properties().configureInitFrom(mtc::Stage::PARENT);
         place_pose->setObject("object");
         geometry_msgs::msg::PoseStamped target;
         target.header.frame_id = "base_link";
-        target.pose.position.x = PLACE_XY[0];
-        target.pose.position.y = PLACE_XY[1];
-        target.pose.position.z = TABLE_TOP + OBJECT_SIZE[2] / 2;
+        const auto xy = slotXY(slot);
+        target.pose.position.x = xy[0];
+        target.pose.position.y = xy[1];
+        target.pose.position.z = TABLE_TOP + TRAY_FLOOR + OBJECT_SIZE[2] / 2 + RELEASE_GAP;
         target.pose.orientation.w = 1.0;
         place_pose->setPose(target);
         place_pose->setMonitoredStage(attach_ptr);
@@ -177,9 +250,10 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node)
         place_ik->properties().configureInitFrom(mtc::Stage::INTERFACE, {"target_pose"});
         place->insert(std::move(place_ik));
 
-        auto open = std::make_unique<mtc::stages::MoveTo>("open hand", interpolation_planner);
+        // Half open only: fully open fingers would reach into the neighbouring slots
+        auto open = std::make_unique<mtc::stages::MoveTo>("release", interpolation_planner);
         open->setGroup(HAND);
-        open->setGoal("gripper_open");
+        open->setGoal("gripper_half_open");
         place->insert(std::move(open));
 
         auto forbid = std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (hand,object)");
@@ -219,8 +293,16 @@ int main(int argc, char **argv)
     executor.add_node(node);
     auto spinner = std::thread([&executor]() { executor.spin(); });
 
+    const int slot = node->get_parameter_or("slot", 0);
+    if (slot < 0 || slot >= SLOT_ROWS * SLOT_COLS) {
+        RCLCPP_ERROR(node->get_logger(), "slot must be 0-%d", SLOT_ROWS * SLOT_COLS - 1);
+        rclcpp::shutdown();
+        spinner.join();
+        return 1;
+    }
+
     setupPlanningScene();
-    auto task = createTask(node);
+    auto task = createTask(node, slot);
 
     try {
         task.init();

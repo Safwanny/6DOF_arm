@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!-- Table and box match the constants in arm_commander/src/pick_place.cpp -->
+<!-- Table, box and tray match the constants in arm_commander/src/pick_place.cpp -->
 <sdf version="1.9">
   <world name="table_world">
     <physics name="1ms" type="ignored">
@@ -66,6 +66,24 @@
           <geometry><box><size>0.04 0.04 0.10</size></box></geometry>
           <material><ambient>0.8 0.1 0.1 1</ambient><diffuse>0.8 0.1 0.1 1</diffuse></material>
         </visual>
+      </link>
+    </model>
+
+    <!-- Shallow 2x3 tray, 9 cm slot pitch (see TRAY_* in pick_place.cpp) -->
+    <model name="tray">
+      <static>true</static>
+      <pose>0.6 0.2 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.2 0.29 0.005</size></box></geometry></collision>
+        <visual name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.2 0.29 0.005</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_xn"><pose>-0.095 0 0.01 0 0 0</pose><geometry><box><size>0.01 0.29 0.02</size></box></geometry></collision>
+        <visual name="wall_xn"><pose>-0.095 0 0.01 0 0 0</pose><geometry><box><size>0.01 0.29 0.02</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_xp"><pose>0.095 0 0.01 0 0 0</pose><geometry><box><size>0.01 0.29 0.02</size></box></geometry></collision>
+        <visual name="wall_xp"><pose>0.095 0 0.01 0 0 0</pose><geometry><box><size>0.01 0.29 0.02</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_yn"><pose>0 -0.14 0.01 0 0 0</pose><geometry><box><size>0.2 0.01 0.02</size></box></geometry></collision>
+        <visual name="wall_yn"><pose>0 -0.14 0.01 0 0 0</pose><geometry><box><size>0.2 0.01 0.02</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_yp"><pose>0 0.14 0.01 0 0 0</pose><geometry><box><size>0.2 0.01 0.02</size></box></geometry></collision>
+        <visual name="wall_yp"><pose>0 0.14 0.01 0 0 0</pose><geometry><box><size>0.2 0.01 0.02</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
       </link>
     </model>
 

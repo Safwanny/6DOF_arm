@@ -10,6 +10,9 @@ def generate_launch_description():
     return LaunchDescription([
         # true when running against arm_gz.launch.xml
         DeclareLaunchArgument("use_sim_time", default_value="false"),
+        # tray slot 0-5 to place the box in
+        DeclareLaunchArgument("slot", default_value="0"),
         Node(package="arm_commander", executable="pick_place", output="screen",
-             parameters=[moveit_config, {"use_sim_time": LaunchConfiguration("use_sim_time")}]),
+             parameters=[moveit_config, {"use_sim_time": LaunchConfiguration("use_sim_time"),
+                                         "slot": LaunchConfiguration("slot")}]),
     ])
