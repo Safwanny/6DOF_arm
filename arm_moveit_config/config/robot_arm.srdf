@@ -51,16 +51,21 @@
     </group_state>
     <group_state name="gripper_open" group="gripper">
         <joint name="gripper_left_finger_joint" value="0"/>
+        <joint name="gripper_right_finger_joint" value="0"/>
     </group_state>
     <group_state name="gripper_close" group="gripper">
         <joint name="gripper_left_finger_joint" value="0.06"/>
+        <joint name="gripper_right_finger_joint" value="0.06"/>
     </group_state>
-    <!-- Finger gap = 0.12 - 2*value: 0.042 squeezes the 4 cm box by 2 mm per side -->
+    <!-- Finger gap = 0.12 - 2*value. 0.05 aims 1 cm inside the 4 cm cube on each side: in Gazebo the
+         force-controlled fingers stop on the cube and squeeze with the controller's max force -->
     <group_state name="gripper_grasp" group="gripper">
-        <joint name="gripper_left_finger_joint" value="0.042"/>
+        <joint name="gripper_left_finger_joint" value="0.05"/>
+        <joint name="gripper_right_finger_joint" value="0.05"/>
     </group_state>
     <group_state name="gripper_half_open" group="gripper">
         <joint name="gripper_left_finger_joint" value="0.03"/>
+        <joint name="gripper_right_finger_joint" value="0.03"/>
     </group_state>
     <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
     <end_effector name="gripper" parent_link="tool_link" group="gripper" parent_group="arm"/>

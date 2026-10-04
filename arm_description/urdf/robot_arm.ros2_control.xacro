@@ -46,18 +46,25 @@
             <param name="initial_value">0.0</param>
           </state_interface>
       </joint>
-      <joint name="gripper_left_finger_joint">
-          <command_interface name="position"/>
-          <state_interface name="position">
-            <param name="initial_value">0.0</param>
-          </state_interface>
-      </joint>
-      <xacro:if value="$(arg sim)">
-          <!-- Mimics the left finger; Gazebo moves it, ros2_control only reads it -->
-          <joint name="gripper_right_finger_joint">
-              <state_interface name="position"/>
+      <!-- Fingers: position on mock hardware; in Gazebo they push with a force (effort) so the
+           grip is a set squeeze instead of whatever a stalled position servo produces -->
+      <xacro:macro name="finger" params="name">
+          <joint name="${name}">
+              <xacro:if value="$(arg sim)">
+                  <command_interface name="effort"/>
+                  <state_interface name="position"/>
+                  <state_interface name="velocity"/>
+              </xacro:if>
+              <xacro:unless value="$(arg sim)">
+                  <command_interface name="position"/>
+                  <state_interface name="position">
+                    <param name="initial_value">0.0</param>
+                  </state_interface>
+              </xacro:unless>
           </joint>
-      </xacro:if>
+      </xacro:macro>
+      <xacro:finger name="gripper_left_finger_joint"/>
+      <xacro:finger name="gripper_right_finger_joint"/>
   </ros2_control>
 
 </robot>

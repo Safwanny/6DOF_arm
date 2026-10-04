@@ -1,6 +1,9 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+    <!-- Max squeeze per finger in Gazebo (N). Effort commands are capped here -->
+    <xacro:property name="FINGER_FORCE" value="15.0" />
+
     <link name="gripper_base_link">
         <visual>
             <geometry>
@@ -34,7 +37,9 @@
             <origin xyz="0 0 0.04" rpy="0 0 0" />
         </collision>
 
-        <xacro:box_inertia m="0.05" x="0.02" y="0.06" z="0.08" xyz="0 0 0.04" />
+        <!-- Two Gazebo workarounds so both fingers move together. Fingers not lighter than this, and
+             joint ranges starting 1 cm below open (0), since a finger resting on its limit can stall -->
+        <xacro:box_inertia m="0.2" x="0.02" y="0.06" z="0.08" xyz="0 0 0.04" />
     </link>
 
     <link name="gripper_right_finger_link">
@@ -52,7 +57,7 @@
             <origin xyz="0 0 0.04" rpy="0 0 0" />
         </collision>
 
-        <xacro:box_inertia m="0.05" x="0.02" y="0.06" z="0.08" xyz="0 0 0.04" />
+        <xacro:box_inertia m="0.2" x="0.02" y="0.06" z="0.08" xyz="0 0 0.04" />
     </link>
 
     <joint name="gripper_left_finger_joint" type="prismatic">
@@ -60,16 +65,16 @@
         <child link="gripper_left_finger_link" />
         <origin xyz="-0.07 0 0.02" rpy="0 0 0" />
         <axis xyz="1 0 0" />
-        <limit effort="50.0" velocity="1.0" lower="0.0" upper="0.06" />
+        <limit effort="${FINGER_FORCE}" velocity="1.0" lower="-0.01" upper="0.06" />
     </joint>
 
     <joint name="gripper_right_finger_joint" type="prismatic">
         <parent link="gripper_base_link" />
         <child link="gripper_right_finger_link" />
         <origin xyz="0.07 0 0.02" rpy="0 0 0" />
-        <axis xyz="1 0 0" />
-        <mimic joint="gripper_left_finger_joint" multiplier="-1.0" />
-        <limit effort="50.0" velocity="1.0" lower="-0.06" upper="0.0" />
+        <!-- Mirrored axis so both fingers close with the same positive value -->
+        <axis xyz="-1 0 0" />
+        <limit effort="${FINGER_FORCE}" velocity="1.0" lower="-0.01" upper="0.06" />
     </joint>
 
 </robot>
