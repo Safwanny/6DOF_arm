@@ -44,8 +44,8 @@
 
     <include file="$(find-pkg-share arm_moveit_config)/launch/move_group.launch.py" />
 
-    <!-- Finds the red cubes in /camera/points and publishes them on /detected_cubes -->
-    <node pkg="arm_bringup" exec="cube_detector.py" />
+    <!-- Finds the coloured boxes in /camera/points and publishes their top faces on /detected_boxes -->
+    <node pkg="arm_bringup" exec="box_detector.py" />
 
     <!-- Colour and depth images side by side in their own window -->
     <node pkg="arm_bringup" exec="camera_view.py" on_exit="shutdown" />
