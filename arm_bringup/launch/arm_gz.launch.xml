@@ -32,7 +32,7 @@
 
     <!-- Same pose as the camera model in table.sdf -->
     <node pkg="tf2_ros" exec="static_transform_publisher"
-          args="--x 1.8 --y 0 --z 1.8 --roll 0 --pitch 0.89 --yaw 3.14159
+          args="--x 1.9 --y 0 --z 1.9 --roll 0 --pitch 0.97 --yaw 3.14159
                 --frame-id base_link --child-frame-id camera_link" />
 
     <node pkg="controller_manager" exec="spawner"
@@ -44,8 +44,8 @@
 
     <include file="$(find-pkg-share arm_moveit_config)/launch/move_group.launch.py" />
 
-    <!-- Finds the red cubes in /camera/points and publishes them on /detected_cubes -->
-    <node pkg="arm_bringup" exec="cube_detector.py" />
+    <!-- Finds the coloured boxes in /camera/points and publishes their top faces on /detected_boxes -->
+    <node pkg="arm_bringup" exec="box_detector.py" />
 
     <!-- Colour and depth images side by side in their own window -->
     <node pkg="arm_bringup" exec="camera_view.py" on_exit="shutdown" />

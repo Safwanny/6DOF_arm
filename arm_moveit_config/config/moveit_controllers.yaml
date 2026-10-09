@@ -27,9 +27,13 @@ moveit_simple_controller_manager:
     action_ns: follow_joint_trajectory
     default: true
 
-# Force-controlled fingers stop on the cube short of their target, so the next gripper move
+# Force-controlled fingers stop on the box short of their target, so the next gripper move
 # starts up to 1 cm from where MoveIt planned it. Allow that for the fingers only.
+# Gazebo with the depth camera can run slower than real time, while MoveIt times
+# executions on the wall clock: give short moves (like closing the gripper) room to finish.
 trajectory_execution:
+  allowed_execution_duration_scaling: 3.0
+  allowed_goal_duration_margin: 2.0
   allowed_start_tolerance_joints:
     gripper_left_finger_joint: 0.02
     gripper_right_finger_joint: 0.02

@@ -1,108 +1,48 @@
 #include <rclcpp/rclcpp.hpp>
+#include <algorithm>
 #include <cmath>
+#include <map>
 #include <sstream>
 #include <arm_interfaces/srv/pick_place.hpp>
-#include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include <moveit/task_constructor/task.h>
 #include <moveit/task_constructor/solvers.h>
 #include <moveit/task_constructor/stages.h>
 #include <std_srvs/srv/trigger.hpp>
 
-// Runs one MTC task per service call; packer.py (Python) decides which cube goes where.
+// Runs one MTC task per service call; packer.py (Python) decides which box goes where.
 namespace mtc = moveit::task_constructor;
 
 const std::string ARM = "arm";
 const std::string HAND = "gripper";
 const std::string HAND_FRAME = "tool_link";
 
-// Scene layout (base_link frame, metres). Tune these if the task fails to plan; packer.py has the same values.
-const double TABLE_TOP = 0.15;
-const double OBJECT_SIZE[3] = {0.04, 0.04, 0.04};
-// Shallow tray, centred on the right half of the table (matches table.sdf).
-// Walls stay below the finger tips (1.5 cm above the cube bottom) so the fingers pass over them.
-const double TRAY_XY[2] = {0.6, 0.2};
-const double TRAY_INNER[2] = {0.18, 0.27};
-const double TRAY_WALL = 0.01;     // thickness
-const double TRAY_FLOOR = 0.005;   // thickness
-const double TRAY_HEIGHT = 0.015;  // floor bottom to wall top
-// Release this far above the tray floor so the box settles instead of being pushed into it
+// Gripper geometry (gripper.xacro): finger inner faces are OPEN_GAP apart at joint value 0 and each
+// finger closes by its joint value; the fingers span 0.02-0.10 m past tool_link.
+const double OPEN_GAP = 0.12;
+const double FINGER_END = 0.10;
+const std::vector<std::string> FINGERS = {"gripper_left_finger_joint", "gripper_right_finger_joint"};
+// Finger tips stop this far above the box bottom: clear of the surface below and of the tray walls
+// (0.5 cm above its floor), while leaving as much of a flat box as possible between the fingers
+const double TIP_CLEARANCE = 0.01;
+// Moves with the box in the hand run at this share of full speed, so it doesn't swing out of the fingers
+const double CARRY_SPEED = 0.5;
+// Aim this far inside each side of the box; in Gazebo the force-controlled fingers stop on it
+const double SQUEEZE = 0.01;
+// Open this far clear of each side to release, so the fingers don't reach into neighbouring boxes
+const double RELEASE_CLEARANCE = 0.015;
+// Release this far above the surface so the box settles instead of being pushed into it
 const double RELEASE_GAP = 0.003;
-// Object centre along tool_link z when grasped: fingers span 0.02-0.10 m past tool_link,
-// so the tips stop 1.5 cm above the cube bottom (clear of the table and the 1 cm tray walls)
-const double GRASP_DEPTH = 0.095;
-// SRDF gripper state aimed 1 cm inside the cube; in Gazebo the force-controlled fingers stop on it
-const std::string GRASP_STATE = "gripper_grasp";
 
-
-moveit_msgs::msg::CollisionObject makeBox(const std::string &id, double sx, double sy, double sz,
-                                          double x, double y, double z)
+// Both fingers at the joint value that leaves `gap` between them
+std::map<std::string, double> fingersAt(double gap)
 {
-    moveit_msgs::msg::CollisionObject obj;
-    obj.id = id;
-    obj.header.frame_id = "base_link";
-    obj.primitives.resize(1);
-    obj.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
-    obj.primitives[0].dimensions = {sx, sy, sz};
-    obj.pose.position.x = x;
-    obj.pose.position.y = y;
-    obj.pose.position.z = z;
-    obj.pose.orientation.w = 1.0;
-    obj.operation = obj.ADD;
-    return obj;
+    const double q = std::clamp((OPEN_GAP - gap) / 2, 0.0, 0.06);
+    return {{FINGERS[0], q}, {FINGERS[1], q}};
 }
 
-// Floor plus 4 walls, all as primitives of one object
-moveit_msgs::msg::CollisionObject makeTray()
+mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const arm_interfaces::srv::PickPlace::Request &req)
 {
-    const double ox = TRAY_INNER[0] + 2 * TRAY_WALL, oy = TRAY_INNER[1] + 2 * TRAY_WALL;
-    const double wall_x = (TRAY_INNER[0] + TRAY_WALL) / 2, wall_y = (TRAY_INNER[1] + TRAY_WALL) / 2;
-    const double parts[5][6] = {  // size xyz, centre xyz (relative to tray centre on the table)
-        {ox, oy, TRAY_FLOOR, 0, 0, TRAY_FLOOR / 2},
-        {TRAY_WALL, oy, TRAY_HEIGHT, -wall_x, 0, TRAY_HEIGHT / 2},
-        {TRAY_WALL, oy, TRAY_HEIGHT, wall_x, 0, TRAY_HEIGHT / 2},
-        {ox, TRAY_WALL, TRAY_HEIGHT, 0, -wall_y, TRAY_HEIGHT / 2},
-        {ox, TRAY_WALL, TRAY_HEIGHT, 0, wall_y, TRAY_HEIGHT / 2},
-    };
-    moveit_msgs::msg::CollisionObject tray;
-    tray.id = "tray";
-    tray.header.frame_id = "base_link";
-    tray.pose.position.x = TRAY_XY[0];
-    tray.pose.position.y = TRAY_XY[1];
-    tray.pose.position.z = TABLE_TOP;
-    tray.pose.orientation.w = 1.0;
-    for (const auto &p : parts) {
-        shape_msgs::msg::SolidPrimitive prim;
-        prim.type = prim.BOX;
-        prim.dimensions = {p[0], p[1], p[2]};
-        geometry_msgs::msg::Pose pose;
-        pose.position.x = p[3];
-        pose.position.y = p[4];
-        pose.position.z = p[5];
-        pose.orientation.w = 1.0;
-        tray.primitives.push_back(prim);
-        tray.primitive_poses.push_back(pose);
-    }
-    tray.operation = tray.ADD;
-    return tray;
-}
-
-// Table and tray only; packer.py adds and moves the cubes
-void setupPlanningScene()
-{
-    moveit::planning_interface::PlanningSceneInterface psi;
-    // Clear an earlier run, including a cube left attached to the hand by a stopped task
-    for (const auto &[id, obj] : psi.getAttachedObjects()) {
-        moveit_msgs::msg::AttachedCollisionObject detach;
-        detach.object.id = id;
-        detach.object.operation = detach.object.REMOVE;
-        psi.applyAttachedCollisionObject(detach);
-    }
-    psi.removeCollisionObjects(psi.getKnownObjectNames());
-    psi.applyCollisionObjects({makeBox("table", 0.4, 0.8, TABLE_TOP, 0.65, 0.0, TABLE_TOP / 2), makeTray()});
-}
-
-mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &object, double x, double y)
-{
+    const std::string &object = req.object;
     mtc::Task task;
     task.stages()->setName("pick and place " + object);
     task.loadRobotModel(node);
@@ -112,8 +52,13 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
 
     auto sampling_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node);
     auto interpolation_planner = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
+    auto carry_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node);
+    carry_planner->setMaxVelocityScalingFactor(CARRY_SPEED);
+    carry_planner->setMaxAccelerationScalingFactor(CARRY_SPEED);
     auto cartesian_planner = std::make_shared<mtc::solvers::CartesianPath>();
     cartesian_planner->setStepSize(0.01);
+    cartesian_planner->setMaxVelocityScalingFactor(CARRY_SPEED);
+    cartesian_planner->setMaxAccelerationScalingFactor(CARRY_SPEED);
 
     auto hand_links = task.getRobotModel()->getJointModelGroup(HAND)->getLinkModelNamesWithCollisionGeometry();
 
@@ -153,18 +98,18 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
         approach->setDirection(tool_forward);
         pick->insert(std::move(approach));
 
-        // Sample grasps around the object's vertical axis, tool pointing down.
-        // 90 deg steps keep the fingers flat on the box faces; a diagonal grasp pinches the
-        // corners (5.7 cm across) and squirts the box out in Gazebo.
+        // Grasp across the object's x axis (the gripped side), tool pointing down: 180 deg steps give the
+        // two hand orientations that keep the fingers flat on those faces.
         auto grasp = std::make_unique<mtc::stages::GenerateGraspPose>("generate grasp pose");
         grasp->properties().configureInitFrom(mtc::Stage::PARENT);
         grasp->setPreGraspPose("gripper_open");
         grasp->setObject(object);
-        grasp->setAngleDelta(M_PI / 2);
+        grasp->setAngleDelta(M_PI);
         grasp->setMonitoredStage(current_ptr);
 
         Eigen::Isometry3d grasp_frame = Eigen::Isometry3d::Identity();
-        grasp_frame.translation().z() = GRASP_DEPTH;
+        // Object centre along tool z: tips TIP_CLEARANCE above the box bottom
+        grasp_frame.translation().z() = FINGER_END + TIP_CLEARANCE - req.height / 2;
         grasp_frame.rotate(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
 
         auto grasp_ik = std::make_unique<mtc::stages::ComputeIK>("grasp pose IK", std::move(grasp));
@@ -181,7 +126,7 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
 
         auto close_hand = std::make_unique<mtc::stages::MoveTo>("close hand", interpolation_planner);
         close_hand->setGroup(HAND);
-        close_hand->setGoal(GRASP_STATE);
+        close_hand->setGoal(fingersAt(req.grip_width - 2 * SQUEEZE));
         pick->insert(std::move(close_hand));
 
         auto attach = std::make_unique<mtc::stages::ModifyPlanningScene>("attach object");
@@ -201,7 +146,7 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
 
     // Arm only: the hand stays closed, and no SRDF group spans arm + hand for a merged trajectory
     auto move_to_place = std::make_unique<mtc::stages::Connect>(
-        "move to place", mtc::stages::Connect::GroupPlannerVector{{ARM, sampling_planner}});
+        "move to place", mtc::stages::Connect::GroupPlannerVector{{ARM, carry_planner}});
     move_to_place->setTimeout(5.0);
     move_to_place->properties().configureInitFrom(mtc::Stage::PARENT);
     task.add(std::move(move_to_place));
@@ -211,7 +156,7 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
         task.properties().exposeTo(place->properties(), {"eef", "group", "ik_frame"});
         place->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group", "ik_frame"});
 
-        // Come straight down into the slot so the box never swings over the tray walls
+        // Come straight down onto the spot so the box never swings over the tray walls or other boxes
         auto lower = std::make_unique<mtc::stages::MoveRelative>("lower object", cartesian_planner);
         lower->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
         lower->setMinMaxDistance(0.03, 0.1);
@@ -226,10 +171,11 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
         place_pose->setObject(object);
         geometry_msgs::msg::PoseStamped target;
         target.header.frame_id = "base_link";
-        target.pose.position.x = x;
-        target.pose.position.y = y;
-        target.pose.position.z = TABLE_TOP + TRAY_FLOOR + OBJECT_SIZE[2] / 2 + RELEASE_GAP;
-        target.pose.orientation.w = 1.0;
+        target.pose.position.x = req.x;
+        target.pose.position.y = req.y;
+        target.pose.position.z = req.z + req.height / 2 + RELEASE_GAP;
+        target.pose.orientation.z = std::sin(req.yaw / 2);
+        target.pose.orientation.w = std::cos(req.yaw / 2);
         place_pose->setPose(target);
         place_pose->setMonitoredStage(attach_ptr);
 
@@ -241,10 +187,10 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
         place_ik->properties().configureInitFrom(mtc::Stage::INTERFACE, {"target_pose"});
         place->insert(std::move(place_ik));
 
-        // Half open only: fully open fingers would reach into the neighbouring slots
+        // Open just clear of the box: fully open fingers would reach into the neighbouring boxes
         auto open = std::make_unique<mtc::stages::MoveTo>("release", interpolation_planner);
         open->setGroup(HAND);
-        open->setGoal("gripper_half_open");
+        open->setGoal(fingersAt(req.grip_width + 2 * RELEASE_CLEARANCE));
         place->insert(std::move(open));
 
         auto forbid = std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (hand,object)");
@@ -265,7 +211,8 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &obj
         task.add(std::move(place));
     }
 
-    // Wait above the table for the next cube (SRDF "ready"); packer.py sends the arm home once every cube is packed
+    // Wait beside the table for the next box (SRDF "ready", out of the camera's view, so packer.py measures
+    // every box whole); packer.py sends the arm home once every box is packed
     auto ready = std::make_unique<mtc::stages::MoveTo>("move to ready", sampling_planner);
     ready->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
     ready->setGoal("ready");
@@ -325,8 +272,6 @@ int main(int argc, char **argv)
     executor.add_node(node);
     auto spinner = std::thread([&executor]() { executor.spin(); });
 
-    setupPlanningScene();
-
     // Tasks stay alive so every solution remains browsable in RViz's Motion Planning Tasks panel
     std::vector<std::unique_ptr<mtc::Task>> tasks;
     auto group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -334,7 +279,7 @@ int main(int argc, char **argv)
         "pick_place",
         [&](const std::shared_ptr<arm_interfaces::srv::PickPlace::Request> req,
             std::shared_ptr<arm_interfaces::srv::PickPlace::Response> res) {
-            tasks.push_back(std::make_unique<mtc::Task>(createTask(node, req->object, req->x, req->y)));
+            tasks.push_back(std::make_unique<mtc::Task>(createTask(node, *req)));
             res->success = runTask(node, *tasks.back());
         },
         rclcpp::ServicesQoS(), group);

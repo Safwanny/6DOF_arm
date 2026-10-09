@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!-- Table and tray match the constants in arm_commander/src/pick_place.cpp -->
+<!-- Table, tray and camera match arm_bringup/config/scene.yaml (and the camera TF in arm_gz.launch.xml) -->
 <sdf version="1.9">
   <world name="table_world">
     <physics name="1ms" type="ignored">
@@ -36,33 +36,33 @@
 
     <model name="table">
       <static>true</static>
-      <pose>0.65 0 0.075 0 0 0</pose>
+      <pose>0.7 0 0.075 0 0 0</pose>
       <link name="link">
         <collision name="collision">
-          <geometry><box><size>0.4 0.8 0.15</size></box></geometry>
+          <geometry><box><size>0.7 1.2 0.15</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>0.4 0.8 0.15</size></box></geometry>
-          <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material>
+          <geometry><box><size>0.7 1.2 0.15</size></box></geometry>
+          <material><ambient>0.55 0.55 0.55 1</ambient><diffuse>0.55 0.55 0.55 1</diffuse></material>
         </visual>
       </link>
     </model>
 
-    <!-- Shallow 2x3 tray, 1 cm walls, 9 cm slot pitch (see TRAY_* in pick_place.cpp) -->
+    <!-- Shallow tray, 20 x 24 cm inside, 1 cm walls 1 cm high: boxes are packed Tetris-style -->
     <model name="tray">
       <static>true</static>
-      <pose>0.6 0.2 0.15 0 0 0</pose>
+      <pose>0.65 0.37 0.15 0 0 0</pose>
       <link name="link">
-        <collision name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.2 0.29 0.005</size></box></geometry></collision>
-        <visual name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.2 0.29 0.005</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_xn"><pose>-0.095 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.29 0.015</size></box></geometry></collision>
-        <visual name="wall_xn"><pose>-0.095 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.29 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_xp"><pose>0.095 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.29 0.015</size></box></geometry></collision>
-        <visual name="wall_xp"><pose>0.095 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.29 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_yn"><pose>0 -0.14 0.0075 0 0 0</pose><geometry><box><size>0.2 0.01 0.015</size></box></geometry></collision>
-        <visual name="wall_yn"><pose>0 -0.14 0.0075 0 0 0</pose><geometry><box><size>0.2 0.01 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_yp"><pose>0 0.14 0.0075 0 0 0</pose><geometry><box><size>0.2 0.01 0.015</size></box></geometry></collision>
-        <visual name="wall_yp"><pose>0 0.14 0.0075 0 0 0</pose><geometry><box><size>0.2 0.01 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.22 0.26 0.005</size></box></geometry></collision>
+        <visual name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.22 0.26 0.005</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_xn"><pose>-0.105 0 0.005 0 0 0</pose><geometry><box><size>0.01 0.26 0.01</size></box></geometry></collision>
+        <visual name="wall_xn"><pose>-0.105 0 0.005 0 0 0</pose><geometry><box><size>0.01 0.26 0.01</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_xp"><pose>0.105 0 0.005 0 0 0</pose><geometry><box><size>0.01 0.26 0.01</size></box></geometry></collision>
+        <visual name="wall_xp"><pose>0.105 0 0.005 0 0 0</pose><geometry><box><size>0.01 0.26 0.01</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_yn"><pose>0 -0.125 0.005 0 0 0</pose><geometry><box><size>0.22 0.01 0.01</size></box></geometry></collision>
+        <visual name="wall_yn"><pose>0 -0.125 0.005 0 0 0</pose><geometry><box><size>0.22 0.01 0.01</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_yp"><pose>0 0.125 0.005 0 0 0</pose><geometry><box><size>0.22 0.01 0.01</size></box></geometry></collision>
+        <visual name="wall_yp"><pose>0 0.125 0.005 0 0 0</pose><geometry><box><size>0.22 0.01 0.01</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
       </link>
     </model>
 
@@ -70,7 +70,7 @@
          Pose must match the camera_link static TF in arm_gz.launch.xml -->
     <model name="camera">
       <static>true</static>
-      <pose>1.8 0 1.8 0 0.89 3.14159</pose>
+      <pose>1.9 0 1.9 0 0.97 3.14159</pose>
       <link name="link">
         <visual name="body">
           <geometry><box><size>0.05 0.1 0.04</size></box></geometry>
@@ -79,10 +79,10 @@
         <sensor name="rgbd_camera" type="rgbd_camera">
           <topic>camera</topic>
           <gz_frame_id>camera_link</gz_frame_id>
-          <update_rate>10</update_rate>
+          <update_rate>5</update_rate>
           <always_on>true</always_on>
           <camera>
-            <horizontal_fov>1.0</horizontal_fov>
+            <horizontal_fov>0.8</horizontal_fov>
             <image><width>640</width><height>480</height></image>
             <clip><near>0.1</near><far>5.0</far></clip>
           </camera>
@@ -92,15 +92,15 @@
     <!-- Stand sits just behind the camera and below it, so it stays out of the view -->
     <model name="camera_stand">
       <static>true</static>
-      <pose>1.86 0 0.87 0 0 0</pose>
+      <pose>1.96 0 0.92 0 0 0</pose>
       <link name="link">
         <visual name="visual">
-          <geometry><cylinder><radius>0.015</radius><length>1.74</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.015</radius><length>1.84</length></cylinder></geometry>
           <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
         </visual>
         <!-- Bracket from the stand top to the back of the camera (behind the lens, out of view) -->
         <visual name="bracket">
-          <pose>-0.015 0 0.89 0 0 0</pose>
+          <pose>-0.015 0 0.94 0 0 0</pose>
           <geometry><box><size>0.07 0.03 0.05</size></box></geometry>
           <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
         </visual>

@@ -1,0 +1,32 @@
+# Scene layout for pick and place, base_link frame, metres. Read by pick_place.launch.py, packer.py,
+# box_detector.py and spawn_boxes.py. worlds/table.sdf (and the camera TF in arm_gz.launch.xml) must match by hand.
+
+# Table top surface: centre, size, height above the floor
+table: {x: 0.70, y: 0.0, size_x: 0.70, size_y: 1.20, top: 0.15}
+
+# Tray on the table: centre, inner size, wall thickness, floor thickness, height of the walls above the table.
+# The walls rise 0.5 cm above the floor, below the finger tips (1 cm above a box's bottom), so fingers pass over them.
+# Small enough that 6 boxes usually need a second layer (about one stacked box per run)
+tray: {x: 0.65, y: 0.37, inner_x: 0.20, inner_y: 0.24, wall: 0.01, floor: 0.005, height: 0.01}
+
+# Where boxes are scattered (box centres), kept within reach of the arm: closer than min_radius to the base
+# the arm can't come straight down on a box (a box at 0.48 m failed the approach)
+scatter: {x: [0.45, 0.95], y: [-0.55, -0.05], min_radius: 0.53, max_radius: 1.0}
+
+# Box sizes. Width is the side the fingers grip: the open gap is 12 cm, so at most 8 cm leaves clearance.
+boxes:
+  length: [0.03, 0.15]
+  width: [0.03, 0.08]
+  height: [0.02, 0.08]
+  density: 400.0   # kg/m^3, about wood
+  min_mass: 0.05   # very light boxes jitter in Gazebo
+
+# One colour per box (r, g, b); the camera tells boxes apart by these. Avoid the arm's blue and green
+# and the grey table and tray. The box is named box_<colour>.
+colours:
+  red: [0.85, 0.1, 0.1]
+  orange: [0.95, 0.5, 0.05]
+  yellow: [0.9, 0.85, 0.1]
+  magenta: [0.85, 0.1, 0.75]
+  purple: [0.45, 0.15, 0.8]
+  cyan: [0.1, 0.8, 0.85]

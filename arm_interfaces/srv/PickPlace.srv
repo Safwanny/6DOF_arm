@@ -1,5 +1,9 @@
-string object   # planning-scene id of the cube to pick
-float64 x       # where its centre goes on the tray floor, base_link
+string object       # planning-scene id of the box to pick; its x axis is the side the fingers grip
+float64 grip_width  # box size across the fingers
+float64 height      # box height
+float64 x           # where the box's bottom centre goes, base_link
 float64 y
+float64 z
+float64 yaw         # direction of the gripped side (the box's x axis) there
 ---
 bool success

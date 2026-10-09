@@ -33,9 +33,10 @@
         <joint name="shoulder_arm_joint" value="0"/>
         <joint name="wrist_hand_joint" value="0"/>
     </group_state>
-    <!-- Tool pointing down 35 cm above the table centre (x 0.6, z 0.5): where pick_place waits between cubes -->
+    <!-- Where pick_place waits between boxes: tool pointing down at (0, 0.6, 0.5), turned to the tray side.
+         The arm lies in the plane x = 0, behind the camera's view of the table, so it never hides a box -->
     <group_state name="ready" group="arm">
-        <joint name="base_shoulder_joint" value="0"/>
+        <joint name="base_shoulder_joint" value="1.5708"/>
         <joint name="shoulder_arm_joint" value="0.5743"/>
         <joint name="arm_elbow_joint" value="2.0930"/>
         <joint name="elbow_forearm_joint" value="0"/>
