@@ -211,11 +211,12 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const arm_interfaces::
         task.add(std::move(place));
     }
 
-    // End at home (arm straight up): out of the camera's view, so packer.py measures every box whole
-    auto home = std::make_unique<mtc::stages::MoveTo>("move home", sampling_planner);
-    home->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-    home->setGoal("home");
-    task.add(std::move(home));
+    // Wait beside the table for the next box (SRDF "ready", out of the camera's view, so packer.py measures
+    // every box whole); packer.py sends the arm home once every box is packed
+    auto ready = std::make_unique<mtc::stages::MoveTo>("move to ready", sampling_planner);
+    ready->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
+    ready->setGoal("ready");
+    task.add(std::move(ready));
 
     return task;
 }
