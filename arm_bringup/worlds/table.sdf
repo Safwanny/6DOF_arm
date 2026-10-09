@@ -48,21 +48,21 @@
       </link>
     </model>
 
-    <!-- Shallow tray, 25 x 30 cm inside, 1 cm walls 1.5 cm high: boxes are packed Tetris-style -->
+    <!-- Shallow tray, 20 x 24 cm inside, 1 cm walls 1.5 cm high: boxes are packed Tetris-style -->
     <model name="tray">
       <static>true</static>
       <pose>0.65 0.37 0.15 0 0 0</pose>
       <link name="link">
-        <collision name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.27 0.32 0.005</size></box></geometry></collision>
-        <visual name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.27 0.32 0.005</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_xn"><pose>-0.13 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.32 0.015</size></box></geometry></collision>
-        <visual name="wall_xn"><pose>-0.13 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.32 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_xp"><pose>0.13 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.32 0.015</size></box></geometry></collision>
-        <visual name="wall_xp"><pose>0.13 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.32 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_yn"><pose>0 -0.155 0.0075 0 0 0</pose><geometry><box><size>0.27 0.01 0.015</size></box></geometry></collision>
-        <visual name="wall_yn"><pose>0 -0.155 0.0075 0 0 0</pose><geometry><box><size>0.27 0.01 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
-        <collision name="wall_yp"><pose>0 0.155 0.0075 0 0 0</pose><geometry><box><size>0.27 0.01 0.015</size></box></geometry></collision>
-        <visual name="wall_yp"><pose>0 0.155 0.0075 0 0 0</pose><geometry><box><size>0.27 0.01 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.22 0.26 0.005</size></box></geometry></collision>
+        <visual name="floor"><pose>0 0 0.0025 0 0 0</pose><geometry><box><size>0.22 0.26 0.005</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_xn"><pose>-0.105 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.26 0.015</size></box></geometry></collision>
+        <visual name="wall_xn"><pose>-0.105 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.26 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_xp"><pose>0.105 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.26 0.015</size></box></geometry></collision>
+        <visual name="wall_xp"><pose>0.105 0 0.0075 0 0 0</pose><geometry><box><size>0.01 0.26 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_yn"><pose>0 -0.125 0.0075 0 0 0</pose><geometry><box><size>0.22 0.01 0.015</size></box></geometry></collision>
+        <visual name="wall_yn"><pose>0 -0.125 0.0075 0 0 0</pose><geometry><box><size>0.22 0.01 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
+        <collision name="wall_yp"><pose>0 0.125 0.0075 0 0 0</pose><geometry><box><size>0.22 0.01 0.015</size></box></geometry></collision>
+        <visual name="wall_yp"><pose>0 0.125 0.0075 0 0 0</pose><geometry><box><size>0.22 0.01 0.015</size></box></geometry><material><ambient>0.75 0.75 0.75 1</ambient><diffuse>0.75 0.75 0.75 1</diffuse></material></visual>
       </link>
     </model>
 

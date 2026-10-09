@@ -4,8 +4,9 @@
 # Table top surface: centre, size, height above the floor
 table: {x: 0.70, y: 0.0, size_x: 0.70, size_y: 1.20, top: 0.15}
 
-# Tray on the table: centre, inner size, wall thickness, floor thickness, height of the walls above the table
-tray: {x: 0.65, y: 0.37, inner_x: 0.25, inner_y: 0.30, wall: 0.01, floor: 0.005, height: 0.015}
+# Tray on the table: centre, inner size, wall thickness, floor thickness, height of the walls above the table.
+# Small enough that 6 boxes usually need a second layer (about one stacked box per run)
+tray: {x: 0.65, y: 0.37, inner_x: 0.20, inner_y: 0.24, wall: 0.01, floor: 0.005, height: 0.015}
 
 # Where boxes are scattered (box centres), kept within reach of the arm
 scatter: {x: [0.45, 0.95], y: [-0.55, -0.05], max_radius: 1.0}
