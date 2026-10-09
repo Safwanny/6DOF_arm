@@ -42,18 +42,23 @@ def setup(context):
     use_sim_time = sim or LaunchConfiguration("use_sim_time").perform(context) == "true"
 
     moveit_config = MoveItConfigsBuilder("robot_arm", package_name="arm_moveit_config").to_dict()
-    pick_place = Node(package="arm_commander", executable="pick_place", output="screen",
-                      parameters=[moveit_config, {"use_sim_time": use_sim_time, "sim": sim,
-                                                  "cube_poses": poses}])
+    # C++ runs the MTC tasks, packer.py decides which cube goes where. In Gazebo it finds the cubes
+    # with the camera only, so the spawn layout goes to Gazebo and never to the packer.
+    packer = {"use_sim_time": use_sim_time, "sim": sim}
+    if not sim:
+        packer["cube_poses"] = poses
+    pick_place = [Node(package="arm_commander", executable="pick_place", output="screen",
+                       parameters=[moveit_config, {"use_sim_time": use_sim_time}]),
+                  Node(package="arm_commander", executable="packer.py", output="screen", parameters=[packer])]
     actions = [LogInfo(msg=f"cube seed {seed} (rerun with seed:={seed})")]
     if not sim:
-        return actions + [pick_place]
+        return actions + pick_place
     # Gazebo: put the cubes in the world first, then plan
     spawn = ExecuteProcess(cmd=[[FindPackagePrefix("arm_bringup"), "/lib/arm_bringup/spawn_cubes.py"]]
                            + [f"{v:.4f}" for v in poses], output="screen")
     failed = LogInfo(msg="spawning cubes failed, is arm_gz.launch.xml running?")
     after_spawn = OnProcessExit(target_action=spawn,
-                                on_exit=lambda event, _: [pick_place] if event.returncode == 0 else [failed])
+                                on_exit=lambda event, _: pick_place if event.returncode == 0 else [failed])
     return actions + [spawn, RegisterEventHandler(after_spawn)]
 
 

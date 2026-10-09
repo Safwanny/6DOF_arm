@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Replace the cubes in the Gazebo world: spawn_cubes.py x y yaw [x y yaw ...]
 
-Each cube publishes its own pose on /model/cube_N/pose, which pick_place uses to re-measure."""
+Nothing tells the robot where they are: the packer finds them with the depth camera."""
 import math
 import subprocess
 import sys
@@ -19,11 +19,7 @@ CUBE_SDF = f"""<sdf version='1.9'><model name='{{name}}'><link name='link'>
 <visual name='visual'><geometry><box><size>{SIZE} {SIZE} {SIZE}</size></box></geometry>
 <material><ambient>0.8 0.1 0.1 1</ambient><diffuse>0.8 0.1 0.1 1</diffuse></material></visual>
 </link>
-<plugin filename='gz-sim-pose-publisher-system' name='gz::sim::systems::PosePublisher'>
-<publish_model_pose>true</publish_model_pose><publish_link_pose>false</publish_link_pose>
-<publish_visual_pose>false</publish_visual_pose><publish_collision_pose>false</publish_collision_pose>
-<use_pose_vector_msg>true</use_pose_vector_msg><update_frequency>20</update_frequency>
-</plugin></model></sdf>"""
+</model></sdf>"""
 
 
 def gz(service, reqtype, req):

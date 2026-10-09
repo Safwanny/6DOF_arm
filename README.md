@@ -16,10 +16,10 @@ This project demonstrates:
 
 | Package               | Description                                                                |
 | --------------------- | -------------------------------------------------------------------------- |
-| **arm_bringup**       | Launch files (mock and Gazebo), Gazebo world, RViz configs, camera viewer  |
-| **arm_commander**     | Test, topic commander and pick-and-place nodes for controlling the robot   |
+| **arm_bringup**       | Launch files (mock and Gazebo), Gazebo world, RViz configs, camera viewer, cube detector |
+| **arm_commander**     | Test and topic commander nodes, the C++ pick-and-place task server and the Python packer |
 | **arm_description**   | Contains URDF/Xacro models and RViz configuration files                    |
-| **arm_interfaces**    | Defines the custom ROS 2 interface `PoseCommand`                           |
+| **arm_interfaces**    | Defines the custom ROS 2 interfaces `PoseCommand` and `PickPlace`          |
 | **arm_moveit_config** | Contains MoveIt 2 configuration files, including ROS 2 control integration |
 
 
@@ -108,13 +108,15 @@ ros2 topic echo --once /joint_states
 ```bash
 ros2 launch arm_bringup pick_place.launch.py
 ```
-The launch file scatters 6 red 4 cm cubes at random positions and angles on the left half of the table, at least 13 cm apart so the open gripper never hits a neighbour. The node adds the table, the cubes and a shallow 2×3 tray to the planning scene. Then it works in a loop until every cube is in the tray:
+The launch file scatters 6 red 4 cm cubes at random positions and angles on the left half of the table, at least 13 cm apart so the open gripper never hits a neighbour. It starts two nodes:
+- **`pick_place`** (C++): adds the table and a shallow 2×3 tray to the planning scene and runs MoveIt Task Constructor tasks on request (`/pick_place`: put cube X at tray position x, y; `/go_home`).
+- **`packer.py`** (Python): decides what to do. It adds the cubes to the planning scene and works in a loop until every cube is in the tray:
 
-1. **Measure** where every cube is now. In Gazebo the real poses come from the simulator; in mock mode the planning scene is the truth.
+1. **Measure** where every cube is now. In Gazebo the depth camera finds them (see below); in mock mode the planning scene is the truth.
 2. **Choose** the nearest upright cube on the table that isn't in the tray, and the first free slot.
-3. **Run** one MTC task: open gripper → move above the cube → lower → close → lift → move above the slot → lower straight into it → half open → retreat → **ready**. Ready is a waiting pose 35 cm above the table, tool down.
+3. **Run** one MTC task through `/pick_place`: open gripper → move above the cube → lower → close → lift → move above the slot → lower straight into it → half open → retreat → **ready**. Ready is a waiting pose 35 cm above the table, tool down.
 
-Re-measuring after every cube catches ones that slipped, got knocked or missed their slot, and retries them. A cube is given up after 3 tries, or if it isn't standing upright on the table (fallen off, or leaning on something). When nothing is left to pick, the node logs `Packed N/6 cubes` and names any cube left out. Then it moves the arm **home** and logs `Job done, arm is home`. If a cube can't be planned, the log names the failing stage and the reason. Stop it with Ctrl+C. Each run starts from a fresh random layout.
+Re-measuring after every cube catches ones that slipped, got knocked or missed their slot, and retries them. A cube is given up after 3 tries, or if it isn't standing upright on the table (fallen off, or leaning on something). When nothing is left to pick, the packer logs `Packed N/6 cubes` and names any cube left out. Then it moves the arm **home** and logs `Job done, arm is home`. If a cube can't be planned, the log names the failing stage and the reason. Stop it with Ctrl+C. Each run starts from a fresh random layout.
 
 Options:
 ```bash
@@ -127,7 +129,7 @@ Slots fill in order 0 → 5. Slot 0 is the corner nearest the arm, on the cube s
 
 To see the table, cubes and tray in RViz, add the **MotionPlanning** display (see step 2). To step through each stage, also add **Add → moveit_task_constructor_visualization → Motion Planning Tasks**.
 
-The table and tray are constants at the top of [pick_place.cpp](arm_commander/src/pick_place.cpp). The area the cubes are scattered over and their spacing are set at the top of [pick_place.launch.py](arm_bringup/launch/pick_place.launch.py).
+The table and tray are constants at the top of [pick_place.cpp](arm_commander/src/pick_place.cpp) and [packer.py](arm_commander/scripts/packer.py) (keep them equal). The area the cubes are scattered over and their spacing are set at the top of [pick_place.launch.py](arm_bringup/launch/pick_place.launch.py).
 
 ## Gazebo simulation
 The same arm in Gazebo Harmonic, with gravity, contacts and a depth camera. Open 2 terminals and in each run `cd ~/ros2_ws && source install/setup.bash`.
@@ -152,7 +154,7 @@ ros2 control list_controllers
 ```bash
 ros2 launch arm_bringup pick_place.launch.py sim:=true
 ```
-`sim:=true` spawns the random cubes in Gazebo, replacing any left from an earlier run, and puts the node on sim time. The fingers grip each cube with a set force, carry it to the tray and stand it in the next free slot. `count:=` and `seed:=` work as in mock mode. Check where a cube ended up (slot 0 is near `0.555 0.11 0.175`, upright):
+`sim:=true` spawns the random cubes in Gazebo, replacing any left from an earlier run, and puts the nodes on sim time. The spawn layout goes only to Gazebo: the packer finds the cubes with the depth camera alone, so it doesn't know where they are or how many there are. When it sees nothing left to pick, it moves the arm home and looks once more, so the arm can't hide a cube. The fingers grip each cube with a set force, carry it to the tray and stand it in the next free slot. `count:=` and `seed:=` work as in mock mode. Check where a cube ended up (slot 0 is near `0.555 0.11 0.175`, upright):
 ```bash
 gz model -m cube_0 -p
 ```
@@ -165,7 +167,16 @@ ros2 run arm_commander test_moveit --ros-args -p use_sim_time:=true
 
 Camera topics: `/camera/image`, `/camera/depth_image`, `/camera/camera_info`, `/camera/points` (frame `camera_link`).
 
-How it fits together: `robot_arm.urdf.xacro` takes `sim:=true` to swap mock hardware for `gz_ros2_control` and bolt the base to the Gazebo world; the world ([table.sdf](arm_bringup/worlds/table.sdf)) matches the table/tray constants in [pick_place.cpp](arm_commander/src/pick_place.cpp). If you move the camera in the world file, update the `camera_link` transform in [arm_gz.launch.xml](arm_bringup/launch/arm_gz.launch.xml) to match.
+**How the camera finds the cubes**: [cube_detector.py](arm_bringup/scripts/cube_detector.py) reads the organized point cloud (xyz + colour per pixel) and publishes `/detected_cubes` (one transform per cube in `base_link`, about 2 mm and 1° from the true pose):
+1. Keep the red pixels between the table top and 10 cm above it, moved into `base_link` (a cube held in the gripper is ignored).
+2. Compute each pixel's surface normal from its neighbours. Red pixels facing up are cube tops.
+3. Each top region gives one cube: its centre (z = top − 2 cm) and its yaw (the smallest rectangle around the face, modulo 90°). A region about twice a face's area is two touching cubes, split in two.
+4. Red with no top facing up is a tipped cube, published tilted so the packer leaves it alone.
+5. Names stay with the cubes between frames (nearest last position first, then leftovers), so the packer can track which cube it moved.
+
+The packer averages 5 frames per measurement. Check the detector without ROS: `python3 arm_bringup/test/test_cube_detector.py`.
+
+How it fits together: `robot_arm.urdf.xacro` takes `sim:=true` to swap mock hardware for `gz_ros2_control` and bolt the base to the Gazebo world; the world ([table.sdf](arm_bringup/worlds/table.sdf)) matches the table/tray constants in pick_place.cpp and packer.py. If you move the camera in the world file, update the `camera_link` transform in [arm_gz.launch.xml](arm_bringup/launch/arm_gz.launch.xml) to match.
 
 ## Named poses (from the SRDF)
 | Group   | Names                                           |
@@ -175,8 +186,10 @@ How it fits together: `robot_arm.urdf.xacro` takes `sim:=true` to swap mock hard
 
 ## Known limitations
 - In mock mode (`arm.launch.xml`) nothing is physical: pick and place "grasps" by attaching the cube in the planning scene. Use the Gazebo launch for a real grasp.
-- Pick and place measures cubes from Gazebo's own model poses (`/world/table_world/pose/info`, bridged in arm_gz.launch.xml), not from the camera yet.
-- The tray has a 9 cm slot pitch because the half-open fingers reach 5 cm from the cube centre. Its 1 cm walls sit below the finger tips, which stop 1.5 cm above the cube bottom. If you change the tray in [table.sdf](arm_bringup/worlds/table.sdf), update the `TRAY_*` constants in pick_place.cpp to match.
+- The detector finds cubes by their red colour, so other red objects would count as cubes. Its thresholds (`MIN_RED`, `MAX_GREEN_BLUE`) and the top-face share `TOP_SEEN` are tuned for the simulated light and camera.
+- A tipped cube touching an upright one is missed: they form one red blob, and that blob has a top.
+- A cube dropped off the table leaves the camera's view. The packer only reports it as `no longer seen`.
+- The tray has a 9 cm slot pitch because the half-open fingers reach 5 cm from the cube centre. Its 1 cm walls sit below the finger tips, which stop 1.5 cm above the cube bottom. If you change the tray in [table.sdf](arm_bringup/worlds/table.sdf), update the `TRAY_*` constants in pick_place.cpp and packer.py to match.
 - Grasps are limited to 90° steps around the cube so the fingers land flat on its faces; a diagonal grasp squeezes the corners and flicks the cube out in Gazebo.
 - The two fingers are separate joints driven with the same value (the right one has a mirrored axis), so they close together. Two Gazebo workarounds keep them in step. They weigh 0.2 kg each, because very light fingers left the physics solver driving one finger before the other. Their joint ranges also start 1 cm below the open position, because a finger resting on its limit could stall. Without these, one finger pushed the cube into the other.
 - In Gazebo the fingers are force-controlled: the gripper controller sends effort (PD on position, gains in [ros2_controllers_gz.yaml](arm_bringup/config/ros2_controllers_gz.yaml)), and each finger is capped at `FINGER_FORCE` (15 N) in [gripper.xacro](arm_description/urdf/gripper.xacro). Finger friction is 2.0. A closed finger stops on the cube short of its target, so MoveIt allows the fingers' next move to start up to 2 cm off ([moveit_controllers.yaml](arm_moveit_config/config/moveit_controllers.yaml)). Mock mode keeps position control.
