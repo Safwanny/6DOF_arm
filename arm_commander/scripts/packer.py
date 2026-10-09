@@ -36,14 +36,14 @@ MAX_ATTEMPTS = 3
 FRAMES = 5
 
 # Tetris rules. Gripper numbers match pick_place.cpp: the release opens 1.5 cm clear of the box and the
-# fingers are 2 cm thick and 6 cm wide; their tips stay 1.5 cm above the box bottom.
+# fingers are 2 cm thick and 6 cm wide; their tips stay 1 cm above the box bottom.
 CELL = 0.005          # height map resolution
 GAP = 0.005           # to neighbours and the walls
 FLAT = 0.005          # a support cell is this close to the base height
 SUPPORT = 0.9         # share of the footprint that must rest on the support
 FINGER_DEPTH = 0.035  # release clearance + finger thickness, beside the gripped faces
 FINGER_WIDTH = 0.06
-TIP_CLEARANCE = 0.015
+TIP_CLEARANCE = 0.01
 MAX_GRIP = 0.08       # widest side the open fingers (12 cm apart) can take
 MAX_STACK = 0.20      # stack height above the tray floor
 WALL = TRAY['height'] - TRAY['floor']  # wall top above the floor
@@ -78,13 +78,16 @@ def tray_grid(placed):
     for b in placed:
         u = (cx - b.x) * math.cos(b.yaw) + (cy - b.y) * math.sin(b.yaw)
         v = -(cx - b.x) * math.sin(b.yaw) + (cy - b.y) * math.cos(b.yaw)
-        inside = (np.abs(u) <= b.length / 2) & (np.abs(v) <= b.width / 2)
+        # Half a cell wider: a cell the box only partly covers counts as covered (measured boxes are a
+        # degree or two off square, and the fingers must not nick their corners)
+        inside = (np.abs(u) <= b.length / 2 + CELL / 2) & (np.abs(v) <= b.width / 2 + CELL / 2)
         grid[inside] = np.maximum(grid[inside], b.z + b.height / 2 - FLOOR)
     return grid, pad
 
 
-def place(length, width, height, grid, pad):
+def place(length, width, height, grid, pad, avoid=()):
     """Where the next box goes, as (x, y, bottom z, grip yaw, grip width) in base_link, or None if it fits nowhere.
+    avoid: spots (x, y, z, grip yaw) already tried for this box that the arm could not plan.
 
     Tried: the box turned 0 or 90 degrees, gripped across its width (or its length if that is narrow enough),
     at every cell. A spot must keep GAP to everything, rest SUPPORT of its footprint (and its centre) on a
@@ -124,7 +127,11 @@ def place(length, width, height, grid, pad):
                         continue
                     x = x0 + (i - pad + kx / 2) * CELL
                     y = y0 + (j - pad + ky / 2) * CELL
-                    best = (score, (x, y, FLOOR + base, 0.0 if grip_along_x else math.pi / 2, grip))
+                    grip_yaw = 0.0 if grip_along_x else math.pi / 2
+                    if any(math.hypot(x - ax, y - ay) < 0.01 and abs(FLOOR + base - az) < FLAT and grip_yaw == ayaw
+                           for ax, ay, az, ayaw in avoid):
+                        continue
+                    best = (score, (x, y, FLOOR + base, grip_yaw, grip))
     return best[1] if best else None
 
 
@@ -186,11 +193,11 @@ class Packer(Node):
         self.apply_scene = self.create_client(ApplyPlanningScene, 'apply_planning_scene')
         self.get_scene = self.create_client(GetPlanningScene, 'get_planning_scene')
 
-        # The depth camera's view of the boxes (box_detector.py), and each box's height: measured once,
-        # standing on the table, since in the tray it may stand on another box
+        # The depth camera's view of the boxes (box_detector.py), and each box's size: measured once, on the
+        # table and in full view. In the tray a box may stand on another or be partly hidden by its neighbours.
         self.lock = threading.Lock()
         self.frames = []
-        self.heights = {}
+        self.sizes = {}
         self.create_subscription(DetectedBoxes, 'detected_boxes', self.on_detected, 10)
 
     def on_detected(self, msg):
@@ -217,7 +224,7 @@ class Packer(Node):
         """Each box over the next FRAMES camera frames, averaged. None if the camera is silent."""
         with self.lock:
             self.frames = []
-        for _ in range(100):  # 5 s at the camera's 10 Hz
+        for _ in range(200):  # 10 s: the camera runs at 5 Hz of sim time, which is slower than real time
             time.sleep(0.05)
             with self.lock:
                 if len(self.frames) >= FRAMES:
@@ -231,16 +238,15 @@ class Packer(Node):
             seen = [f[name] for f in frames if name in f]
             x, y, top = (sum(getattr(b.top.position, a) for b in seen) / len(seen) for a in 'xyz')
             if not last.upright:
-                boxes.append(Box(name, x, y, top, 0.0, 0.0, 0.0, self.heights.get(name, 0.0), False))
+                boxes.append(Box(name, x, y, top, 0.0, *self.sizes.get(name, (0.0, 0.0, 0.0)), False))
                 continue
             # The yaw of a box repeats every 180 degrees: average it as an angle on that circle
             two = [4 * math.atan2(b.top.orientation.z, b.top.orientation.w) for b in seen]
             yaw = math.atan2(sum(map(math.sin, two)), sum(map(math.cos, two))) / 2
-            length = sum(b.length for b in seen) / len(seen)
-            width = sum(b.width for b in seen) / len(seen)
-            if name not in self.heights:
-                self.heights[name] = top - TABLE_TOP
-            h = self.heights[name]
+            if name not in self.sizes:
+                self.sizes[name] = (sum(b.length for b in seen) / len(seen), sum(b.width for b in seen) / len(seen),
+                                    top - TABLE_TOP)
+            length, width, h = self.sizes[name]
             boxes.append(Box(name, x, y, top - h / 2, yaw, length, width, h))
         return boxes
 
@@ -289,9 +295,8 @@ class Packer(Node):
         if not self.sim:
             self.apply([scene_box(b) for b in self.mock_boxes])
 
-        attempts, no_fit = {}, set()
+        attempts, no_fit, failed = {}, set(), {}
         boxes, ever_seen = [], set()
-        home = False  # arm already home, out of the camera's view
         while rclpy.ok():
             boxes = self.measure()
             if boxes is None:
@@ -304,19 +309,13 @@ class Packer(Node):
             grid, pad = tray_grid([b for b in boxes if b.in_tray()])
             box, spot, no_fit = None, None, set()
             for b in todo:
-                spot = place(b.length, b.width, b.height, grid, pad)
+                spot = place(b.length, b.width, b.height, grid, pad, failed.get(b.name, ()))
                 if spot:
                     box = b
                     break
                 no_fit.add(b.name)
             if box is None:
-                # Nothing left to pack in sight: look once more from home, where the arm can't hide a box
-                if self.sim and not home:
-                    home = self.go_home.call(Trigger.Request()).success
-                    if home:
-                        continue
                 break
-            home = False
             x, y, z, grip_yaw, grip = spot
             grip_length = grip == box.length and box.length != box.width
             attempts[box.name] = attempts.get(box.name, 0) + 1
@@ -325,8 +324,10 @@ class Packer(Node):
                 f'{box.name} {box.length * 100:.1f} x {box.width * 100:.1f} x {box.height * 100:.1f} cm at '
                 f'({box.x:.3f}, {box.y:.3f}) -> ({x:.3f}, {y:.3f}) {where} (try {attempts[box.name]})')
             self.apply([scene_box(box, grip_length)])  # its x axis along the side the fingers take
-            self.pick_place.call(PickPlace.Request(object=box.name, grip_width=grip, height=box.height,
-                                                   x=x, y=y, z=z, yaw=grip_yaw))
+            ok = self.pick_place.call(PickPlace.Request(object=box.name, grip_width=grip, height=box.height,
+                                                        x=x, y=y, z=z, yaw=grip_yaw)).success
+            if not ok:  # don't send it to the same spot again: try the next best one
+                failed.setdefault(box.name, []).append((x, y, z, grip_yaw))
             if self.sim:
                 time.sleep(1.0)  # let the released box settle
 
@@ -343,7 +344,7 @@ class Packer(Node):
         for name in lost:
             self.get_logger().warn(f'{name} left out: no longer seen, dropped off the table?')
         self.get_logger().info(f'Packed {packed}/{len(boxes) + len(lost)} boxes')
-        if home or self.go_home.call(Trigger.Request()).success:
+        if self.go_home.call(Trigger.Request()).success:
             self.get_logger().info('Job done, arm is home')
 
 

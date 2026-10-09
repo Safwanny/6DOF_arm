@@ -21,8 +21,11 @@ const std::string HAND_FRAME = "tool_link";
 const double OPEN_GAP = 0.12;
 const double FINGER_END = 0.10;
 const std::vector<std::string> FINGERS = {"gripper_left_finger_joint", "gripper_right_finger_joint"};
-// Finger tips stop this far above the box bottom: clear of the surface below and the 1.5 cm tray walls
-const double TIP_CLEARANCE = 0.015;
+// Finger tips stop this far above the box bottom: clear of the surface below and of the tray walls
+// (0.5 cm above its floor), while leaving as much of a flat box as possible between the fingers
+const double TIP_CLEARANCE = 0.01;
+// Moves with the box in the hand run at this share of full speed, so it doesn't swing out of the fingers
+const double CARRY_SPEED = 0.5;
 // Aim this far inside each side of the box; in Gazebo the force-controlled fingers stop on it
 const double SQUEEZE = 0.01;
 // Open this far clear of each side to release, so the fingers don't reach into neighbouring boxes
@@ -49,8 +52,13 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const arm_interfaces::
 
     auto sampling_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node);
     auto interpolation_planner = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
+    auto carry_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node);
+    carry_planner->setMaxVelocityScalingFactor(CARRY_SPEED);
+    carry_planner->setMaxAccelerationScalingFactor(CARRY_SPEED);
     auto cartesian_planner = std::make_shared<mtc::solvers::CartesianPath>();
     cartesian_planner->setStepSize(0.01);
+    cartesian_planner->setMaxVelocityScalingFactor(CARRY_SPEED);
+    cartesian_planner->setMaxAccelerationScalingFactor(CARRY_SPEED);
 
     auto hand_links = task.getRobotModel()->getJointModelGroup(HAND)->getLinkModelNamesWithCollisionGeometry();
 
@@ -138,7 +146,7 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const arm_interfaces::
 
     // Arm only: the hand stays closed, and no SRDF group spans arm + hand for a merged trajectory
     auto move_to_place = std::make_unique<mtc::stages::Connect>(
-        "move to place", mtc::stages::Connect::GroupPlannerVector{{ARM, sampling_planner}});
+        "move to place", mtc::stages::Connect::GroupPlannerVector{{ARM, carry_planner}});
     move_to_place->setTimeout(5.0);
     move_to_place->properties().configureInitFrom(mtc::Stage::PARENT);
     task.add(std::move(move_to_place));
@@ -203,11 +211,11 @@ mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const arm_interfaces::
         task.add(std::move(place));
     }
 
-    // Wait above the table for the next box (SRDF "ready"); packer.py sends the arm home once every box is packed
-    auto ready = std::make_unique<mtc::stages::MoveTo>("move to ready", sampling_planner);
-    ready->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-    ready->setGoal("ready");
-    task.add(std::move(ready));
+    // End at home (arm straight up): out of the camera's view, so packer.py measures every box whole
+    auto home = std::make_unique<mtc::stages::MoveTo>("move home", sampling_planner);
+    home->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
+    home->setGoal("home");
+    task.add(std::move(home));
 
     return task;
 }

@@ -82,4 +82,9 @@ gap_boxes = [Box('a', x0 + 0.055, TRAY['y'], FLOOR + 0.02, math.pi / 2, TRAY['in
 spot = place(0.04, 0.035, 0.03, *tray_grid(gap_boxes))
 assert spot is not None and spot[2] > FLOOR + FLAT, spot  # goes on top instead
 
+# A spot the arm failed to reach is avoided next time
+first = place(0.10, 0.05, 0.03, *tray_grid([]))
+second = place(0.10, 0.05, 0.03, *tray_grid([]), avoid=[first[:4]])
+assert second is not None and math.hypot(second[0] - first[0], second[1] - first[1]) >= 0.01, (first, second)
+
 print(f'tetris ok: {len(placed)} boxes, {sum(b.z - b.height / 2 > FLOOR + FLAT for b in placed)} stacked')

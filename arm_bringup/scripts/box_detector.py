@@ -121,7 +121,7 @@ def main():
 
         def table_pixels(self, xyz, rot, trans):
             """Rows and columns that see the table (with margin): only these are searched, which keeps
-            the 1280 x 960 cloud fast. The camera is fixed, so this is worked out once."""
+            each cloud fast. The camera is fixed, so this is worked out once."""
             t = SCENE['table']
             pts = xyz @ rot.T + trans
             on = ((np.abs(pts[..., 0] - t['x']) < t['size_x'] / 2 + 0.05)

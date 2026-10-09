@@ -36,7 +36,7 @@ def sample_boxes(count, rng):
         x, y = rng.uniform(*area["x"]), rng.uniform(*area["y"])
         on_table = (abs(x - t["x"]) + r < t["size_x"] / 2 - 0.01 and abs(y - t["y"]) + r < t["size_y"] / 2 - 0.01)
         reach = max(r, FINGER_REACH)
-        if (on_table and math.hypot(x, y) <= area["max_radius"]
+        if (on_table and area["min_radius"] <= math.hypot(x, y) <= area["max_radius"]
                 and all(math.hypot(x - b[1], y - b[2]) >= reach + max(b[7], FINGER_REACH) for b in boxes)):
             boxes.append((colours[len(boxes)], x, y, rng.uniform(0, math.pi), length, width, height, r))
     raise RuntimeError(f"could not fit {count} boxes on the table, try another seed")
