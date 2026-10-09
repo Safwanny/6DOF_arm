@@ -32,7 +32,7 @@
 
     <!-- Same pose as the camera model in table.sdf -->
     <node pkg="tf2_ros" exec="static_transform_publisher"
-          args="--x 1.8 --y 0 --z 1.8 --roll 0 --pitch 0.89 --yaw 3.14159
+          args="--x 1.9 --y 0 --z 1.9 --roll 0 --pitch 0.97 --yaw 3.14159
                 --frame-id base_link --child-frame-id camera_link" />
 
     <node pkg="controller_manager" exec="spawner"

@@ -2,7 +2,6 @@
 #include <cmath>
 #include <sstream>
 #include <arm_interfaces/srv/pick_place.hpp>
-#include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include <moveit/task_constructor/task.h>
 #include <moveit/task_constructor/solvers.h>
 #include <moveit/task_constructor/stages.h>
@@ -15,16 +14,10 @@ const std::string ARM = "arm";
 const std::string HAND = "gripper";
 const std::string HAND_FRAME = "tool_link";
 
-// Scene layout (base_link frame, metres). Tune these if the task fails to plan; packer.py has the same values.
+// Scene layout (base_link frame, metres), see arm_bringup/config/scene.yaml; packer.py sets up the planning scene
 const double TABLE_TOP = 0.15;
 const double OBJECT_SIZE[3] = {0.04, 0.04, 0.04};
-// Shallow tray, centred on the right half of the table (matches table.sdf).
-// Walls stay below the finger tips (1.5 cm above the cube bottom) so the fingers pass over them.
-const double TRAY_XY[2] = {0.6, 0.2};
-const double TRAY_INNER[2] = {0.18, 0.27};
-const double TRAY_WALL = 0.01;     // thickness
-const double TRAY_FLOOR = 0.005;   // thickness
-const double TRAY_HEIGHT = 0.015;  // floor bottom to wall top
+const double TRAY_FLOOR = 0.005;  // thickness, see scene.yaml
 // Release this far above the tray floor so the box settles instead of being pushed into it
 const double RELEASE_GAP = 0.003;
 // Object centre along tool_link z when grasped: fingers span 0.02-0.10 m past tool_link,
@@ -32,74 +25,6 @@ const double RELEASE_GAP = 0.003;
 const double GRASP_DEPTH = 0.095;
 // SRDF gripper state aimed 1 cm inside the cube; in Gazebo the force-controlled fingers stop on it
 const std::string GRASP_STATE = "gripper_grasp";
-
-
-moveit_msgs::msg::CollisionObject makeBox(const std::string &id, double sx, double sy, double sz,
-                                          double x, double y, double z)
-{
-    moveit_msgs::msg::CollisionObject obj;
-    obj.id = id;
-    obj.header.frame_id = "base_link";
-    obj.primitives.resize(1);
-    obj.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
-    obj.primitives[0].dimensions = {sx, sy, sz};
-    obj.pose.position.x = x;
-    obj.pose.position.y = y;
-    obj.pose.position.z = z;
-    obj.pose.orientation.w = 1.0;
-    obj.operation = obj.ADD;
-    return obj;
-}
-
-// Floor plus 4 walls, all as primitives of one object
-moveit_msgs::msg::CollisionObject makeTray()
-{
-    const double ox = TRAY_INNER[0] + 2 * TRAY_WALL, oy = TRAY_INNER[1] + 2 * TRAY_WALL;
-    const double wall_x = (TRAY_INNER[0] + TRAY_WALL) / 2, wall_y = (TRAY_INNER[1] + TRAY_WALL) / 2;
-    const double parts[5][6] = {  // size xyz, centre xyz (relative to tray centre on the table)
-        {ox, oy, TRAY_FLOOR, 0, 0, TRAY_FLOOR / 2},
-        {TRAY_WALL, oy, TRAY_HEIGHT, -wall_x, 0, TRAY_HEIGHT / 2},
-        {TRAY_WALL, oy, TRAY_HEIGHT, wall_x, 0, TRAY_HEIGHT / 2},
-        {ox, TRAY_WALL, TRAY_HEIGHT, 0, -wall_y, TRAY_HEIGHT / 2},
-        {ox, TRAY_WALL, TRAY_HEIGHT, 0, wall_y, TRAY_HEIGHT / 2},
-    };
-    moveit_msgs::msg::CollisionObject tray;
-    tray.id = "tray";
-    tray.header.frame_id = "base_link";
-    tray.pose.position.x = TRAY_XY[0];
-    tray.pose.position.y = TRAY_XY[1];
-    tray.pose.position.z = TABLE_TOP;
-    tray.pose.orientation.w = 1.0;
-    for (const auto &p : parts) {
-        shape_msgs::msg::SolidPrimitive prim;
-        prim.type = prim.BOX;
-        prim.dimensions = {p[0], p[1], p[2]};
-        geometry_msgs::msg::Pose pose;
-        pose.position.x = p[3];
-        pose.position.y = p[4];
-        pose.position.z = p[5];
-        pose.orientation.w = 1.0;
-        tray.primitives.push_back(prim);
-        tray.primitive_poses.push_back(pose);
-    }
-    tray.operation = tray.ADD;
-    return tray;
-}
-
-// Table and tray only; packer.py adds and moves the cubes
-void setupPlanningScene()
-{
-    moveit::planning_interface::PlanningSceneInterface psi;
-    // Clear an earlier run, including a cube left attached to the hand by a stopped task
-    for (const auto &[id, obj] : psi.getAttachedObjects()) {
-        moveit_msgs::msg::AttachedCollisionObject detach;
-        detach.object.id = id;
-        detach.object.operation = detach.object.REMOVE;
-        psi.applyAttachedCollisionObject(detach);
-    }
-    psi.removeCollisionObjects(psi.getKnownObjectNames());
-    psi.applyCollisionObjects({makeBox("table", 0.4, 0.8, TABLE_TOP, 0.65, 0.0, TABLE_TOP / 2), makeTray()});
-}
 
 mtc::Task createTask(const rclcpp::Node::SharedPtr &node, const std::string &object, double x, double y)
 {
@@ -324,8 +249,6 @@ int main(int argc, char **argv)
     rclcpp::executors::MultiThreadedExecutor executor;
     executor.add_node(node);
     auto spinner = std::thread([&executor]() { executor.spin(); });
-
-    setupPlanningScene();
 
     // Tasks stay alive so every solution remains browsable in RViz's Motion Planning Tasks panel
     std::vector<std::unique_ptr<mtc::Task>> tasks;

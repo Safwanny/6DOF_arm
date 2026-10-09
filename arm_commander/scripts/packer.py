@@ -4,26 +4,32 @@
 The motion itself is one /pick_place call to the C++ task server (pick_place.cpp). Re-measuring after
 every cube catches ones that slipped, got knocked or missed their slot, and retries them."""
 import math
+import os
 import threading
 import time
 
 import rclpy
+import yaml
+from ament_index_python.packages import get_package_share_directory
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from arm_interfaces.srv import PickPlace
 from moveit_msgs.msg import AttachedCollisionObject, CollisionObject, PlanningScene, PlanningSceneComponents
 from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
+from geometry_msgs.msg import Pose
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
 from tf2_msgs.msg import TFMessage
 
-# Scene layout (base_link, metres), matches pick_place.cpp and table.sdf
-TABLE_TOP = 0.15
+# Scene layout (base_link, metres)
+SCENE = yaml.safe_load(open(os.path.join(get_package_share_directory('arm_bringup'), 'config', 'scene.yaml')))
+TABLE, TRAY = SCENE['table'], SCENE['tray']
+TABLE_TOP = TABLE['top']
 SIZE = 0.04
 # Cubes float this far above the table in the planning scene: touching counts as colliding once attached
 CUBE_LIFT = 0.001
-TRAY_XY = (0.6, 0.2)
-TRAY_INNER = (0.18, 0.27)
+TRAY_XY = (TRAY['x'], TRAY['y'])
+TRAY_INNER = (TRAY['inner_x'], TRAY['inner_y'])
 SLOT_PITCH = 0.09
 SLOT_ROWS, SLOT_COLS = 2, 3  # along x, along y
 # Give up on a cube after this many tries (planning or execution), so a stuck cube can't loop forever
@@ -61,7 +67,7 @@ class Cube:
     def on_table(self):
         """Upright and standing on the table top (not fallen off, not leaning on something)."""
         return (self.upright and abs(self.z - (TABLE_TOP + SIZE / 2)) < 0.01
-                and abs(self.x - 0.65) < 0.2 and abs(self.y) < 0.4)
+                and abs(self.x - TABLE['x']) < TABLE['size_x'] / 2 and abs(self.y - TABLE['y']) < TABLE['size_y'] / 2)
 
     def nearest_slot(self):
         return min(range(SLOT_ROWS * SLOT_COLS),
@@ -72,14 +78,40 @@ def yaw_quat(yaw):
     return (0.0, 0.0, math.sin(yaw / 2), math.cos(yaw / 2))
 
 
-def cube_object(name, x, y, z, q):
+def box_object(name, size, x, y, z, q=(0.0, 0.0, 0.0, 1.0)):
     obj = CollisionObject(id=name, operation=CollisionObject.ADD)
     obj.header.frame_id = 'base_link'
-    obj.primitives = [SolidPrimitive(type=SolidPrimitive.BOX, dimensions=[SIZE, SIZE, SIZE])]
+    obj.primitives = [SolidPrimitive(type=SolidPrimitive.BOX, dimensions=list(size))]
     obj.pose.position.x, obj.pose.position.y, obj.pose.position.z = x, y, z
     o = obj.pose.orientation
     o.x, o.y, o.z, o.w = q
     return obj
+
+
+def cube_object(name, x, y, z, q):
+    return box_object(name, (SIZE, SIZE, SIZE), x, y, z, q)
+
+
+def table_and_tray():
+    """The fixed scene: table, and the tray as its floor plus 4 walls, all primitives of one object."""
+    t = TRAY
+    ox, oy = t['inner_x'] + 2 * t['wall'], t['inner_y'] + 2 * t['wall']
+    wx, wy = (t['inner_x'] + t['wall']) / 2, (t['inner_y'] + t['wall']) / 2
+    parts = [((ox, oy, t['floor']), (0, 0, t['floor'] / 2)),
+             ((t['wall'], oy, t['height']), (-wx, 0, t['height'] / 2)),
+             ((t['wall'], oy, t['height']), (wx, 0, t['height'] / 2)),
+             ((ox, t['wall'], t['height']), (0, -wy, t['height'] / 2)),
+             ((ox, t['wall'], t['height']), (0, wy, t['height'] / 2))]
+    tray = box_object('tray', parts[0][0], t['x'], t['y'], TABLE_TOP)
+    tray.primitives = [SolidPrimitive(type=SolidPrimitive.BOX, dimensions=list(size)) for size, _ in parts]
+    tray.primitive_poses = []
+    for _, (px, py, pz) in parts:
+        pose = Pose()
+        pose.position.x, pose.position.y, pose.position.z = float(px), float(py), float(pz)
+        pose.orientation.w = 1.0
+        tray.primitive_poses.append(pose)
+    table = box_object('table', (TABLE['size_x'], TABLE['size_y'], TABLE_TOP), TABLE['x'], TABLE['y'], TABLE_TOP / 2)
+    return [table, tray]
 
 
 class Packer(Node):
@@ -182,6 +214,11 @@ class Packer(Node):
         for client in (self.pick_place, self.go_home, self.apply_scene, self.get_scene):
             while not client.wait_for_service(timeout_sec=2.0):
                 self.get_logger().info(f'waiting for {client.srv_name}')
+        # Clear an earlier run, including a box left attached to the hand by a stopped task
+        old = self.scene_cubes()
+        self.apply(detach=[a.object.id for a in old.robot_state.attached_collision_objects])
+        self.apply([CollisionObject(id=o.id, operation=CollisionObject.REMOVE)
+                    for o in self.scene_cubes().world.collision_objects] + table_and_tray())
         if not self.sim:
             self.apply([cube_object(f'cube_{i}', x, y, TABLE_TOP + SIZE / 2 + CUBE_LIFT, yaw_quat(yaw))
                         for i, (x, y, yaw) in enumerate(self.poses)])
