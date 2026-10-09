@@ -1,0 +1,5 @@
+string object   # planning-scene id of the cube to pick
+float64 x       # where its centre goes on the tray floor, base_link
+float64 y
+---
+bool success
