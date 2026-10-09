@@ -24,7 +24,7 @@
     <node pkg="ros_gz_sim" exec="create" args="-topic robot_description -name robot_arm" />
 
     <!-- /model/cube_N/pose: where each cube really is (published by the cube, see spawn_cubes.py);
-         pick_place re-measures from them -->
+         the ground truth for checking the camera, and what packer.py uses with perception:=false -->
     <node pkg="ros_gz_bridge" exec="parameter_bridge"
           args="/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock
                 /camera/image@sensor_msgs/msg/Image[gz.msgs.Image
@@ -51,6 +51,9 @@
           args="gripper_controller --controller-manager-timeout 60" />
 
     <include file="$(find-pkg-share arm_moveit_config)/launch/move_group.launch.py" />
+
+    <!-- Finds the red cubes in /camera/points and publishes them on /detected_cubes -->
+    <node pkg="arm_bringup" exec="cube_detector.py" />
 
     <!-- Colour and depth images side by side in their own window -->
     <node pkg="arm_bringup" exec="camera_view.py" on_exit="shutdown" />

@@ -13,6 +13,6 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(PROGRAMS scripts/camera_view.py scripts/spawn_cubes.py DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/camera_view.py scripts/spawn_cubes.py scripts/cube_detector.py DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
