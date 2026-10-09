@@ -42,11 +42,14 @@ def setup(context):
     use_sim_time = sim or LaunchConfiguration("use_sim_time").perform(context) == "true"
 
     moveit_config = MoveItConfigsBuilder("robot_arm", package_name="arm_moveit_config").to_dict()
-    # C++ runs the MTC tasks, packer.py decides which cube goes where
+    # C++ runs the MTC tasks, packer.py decides which cube goes where. In Gazebo it finds the cubes
+    # with the camera only, so the spawn layout goes to Gazebo and never to the packer.
+    packer = {"use_sim_time": use_sim_time, "sim": sim}
+    if not sim:
+        packer["cube_poses"] = poses
     pick_place = [Node(package="arm_commander", executable="pick_place", output="screen",
                        parameters=[moveit_config, {"use_sim_time": use_sim_time}]),
-                  Node(package="arm_commander", executable="packer.py", output="screen",
-                       parameters=[{"use_sim_time": use_sim_time, "sim": sim, "cube_poses": poses}])]
+                  Node(package="arm_commander", executable="packer.py", output="screen", parameters=[packer])]
     actions = [LogInfo(msg=f"cube seed {seed} (rerun with seed:={seed})")]
     if not sim:
         return actions + pick_place

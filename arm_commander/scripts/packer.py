@@ -24,11 +24,12 @@ SIZE = 0.04
 CUBE_LIFT = 0.001
 TRAY_XY = (0.6, 0.2)
 TRAY_INNER = (0.18, 0.27)
-TRAY_FLOOR = 0.005
 SLOT_PITCH = 0.09
 SLOT_ROWS, SLOT_COLS = 2, 3  # along x, along y
 # Give up on a cube after this many tries (planning or execution), so a stuck cube can't loop forever
 MAX_ATTEMPTS = 3
+# Gazebo: average this many /detected_cubes frames per measurement to smooth out pixel noise
+FRAMES = 5
 # Cube spot used when no cube_poses are given (x, y, yaw); pick_place.launch.py randomises them
 DEFAULT_CUBE_POSES = [0.6, -0.2, 0.0]
 
@@ -85,6 +86,7 @@ class Packer(Node):
     def __init__(self):
         super().__init__('packer')
         self.sim = self.declare_parameter('sim', False).value
+        # Mock hardware has no camera: the cubes start where cube_poses says. In Gazebo the camera finds them.
         poses = self.declare_parameter('cube_poses', DEFAULT_CUBE_POSES).value
         if len(poses) % 3 or len(poses) // 3 > SLOT_ROWS * SLOT_COLS:
             raise ValueError(f'cube_poses must be x, y, yaw triples, at most {SLOT_ROWS * SLOT_COLS} cubes')
@@ -94,19 +96,14 @@ class Packer(Node):
         self.apply_scene = self.create_client(ApplyPlanningScene, 'apply_planning_scene')
         self.get_scene = self.create_client(GetPlanningScene, 'get_planning_scene')
 
-        # Gazebo: each cube publishes its real pose (spawn_cubes.py, bridged in arm_gz.launch.xml)
+        # The depth camera's view of the cubes (cube_detector.py)
         self.lock = threading.Lock()
-        self.latest, self.count = {}, 0
-        self.topic = '/model/cube_N/pose'
-        for i in range(SLOT_ROWS * SLOT_COLS):
-            self.create_subscription(TFMessage, f'/model/cube_{i}/pose', self.on_poses, 10)
+        self.frames = []
+        self.create_subscription(TFMessage, 'detected_cubes', self.on_detected, 10)
 
-    def on_poses(self, msg):
+    def on_detected(self, msg):
         with self.lock:
-            for t in msg.transforms:
-                if t.child_frame_id.startswith('cube_'):
-                    self.latest[t.child_frame_id] = t.transform
-            self.count += 1
+            self.frames = (self.frames + [{t.child_frame_id: t.transform for t in msg.transforms}])[-FRAMES:]
 
     def apply(self, objects=(), detach=()):
         scene = PlanningScene(is_diff=True)
@@ -125,21 +122,35 @@ class Packer(Node):
                                       | PlanningSceneComponents.ROBOT_STATE_ATTACHED_OBJECTS)
         return self.get_scene.call(req).scene
 
-    def wait_fresh(self):
-        """Poses received after the call, so they show the world after the last motion."""
+    def look(self):
+        """Each cube in the next FRAMES camera frames, averaged: {name: (x, y, z, quaternion)}.
+        Frames taken after the call show the world after the last motion. None if the camera is silent."""
         with self.lock:
-            start = self.count
-        for _ in range(100):  # 5 s
+            self.frames = []
+        for _ in range(100):  # 5 s at the camera's 10 Hz
             time.sleep(0.05)
             with self.lock:
-                if self.count > start:
+                if len(self.frames) >= FRAMES:
                     break
-        time.sleep(0.2)  # cubes publish separately: after one fresh message, wait for the others to catch up
         with self.lock:
-            return dict(self.latest) if self.count > start else None
+            frames = list(self.frames)
+        if len(frames) < FRAMES:
+            return None
+        cubes = {}
+        for name, last in frames[-1].items():
+            seen = [f[name] for f in frames if name in f]
+            x, y, z = (sum(getattr(t.translation, a) for t in seen) / len(seen) for a in 'xyz')
+            r = last.rotation
+            if abs(r.x) > 0.1 or abs(r.y) > 0.1:  # tipped over: the detector tilts it, keep that
+                cubes[name] = (x, y, z, (r.x, r.y, r.z, r.w))
+                continue
+            # The yaw of a cube repeats every 90 degrees: average it as an angle on that circle
+            four = [4 * 2 * math.atan2(t.rotation.z, t.rotation.w) for t in seen]
+            cubes[name] = (x, y, z, yaw_quat(math.atan2(sum(map(math.sin, four)), sum(map(math.cos, four))) / 4))
+        return cubes
 
     def measure(self):
-        """Where the cubes are now. In Gazebo the planning scene is moved to match."""
+        """Where the cubes are now, or None if they can't be seen. In Gazebo the planning scene is moved to match."""
         scene = self.scene_cubes()
         # A task that failed mid-carry leaves its cube attached to the hand; put it back in the world
         attached = [a.object.id for a in scene.robot_state.attached_collision_objects]
@@ -155,20 +166,16 @@ class Packer(Node):
                     cubes.append(Cube(o.id, p.x, p.y, p.z, (q.x, q.y, q.z, q.w)))
             return cubes
 
-        measured = self.wait_fresh()
-        if measured is None:
-            return []
-        cubes, objects = [], []
-        for name, t in sorted(measured.items()):
-            p, r = t.translation, t.rotation
-            cube = Cube(name, p.x, p.y, p.z, (r.x, r.y, r.z, r.w))
-            cubes.append(cube)
-            # Tipped over: keep the real orientation for collisions
-            obj = cube_object(name, p.x, p.y, p.z + CUBE_LIFT, yaw_quat(cube.yaw) if cube.upright else cube.q)
-            if p.z < TABLE_TOP:
-                obj.operation = CollisionObject.REMOVE  # fell off the table, out of reach
-            objects.append(obj)
-        self.apply(objects)
+        seen = self.look()
+        if seen is None:
+            return None
+        cubes = [Cube(name, *m) for name, m in sorted(seen.items())]
+        # Cubes the camera no longer sees (fell off the table) leave the planning scene
+        gone = [CollisionObject(id=o.id, operation=CollisionObject.REMOVE) for o in scene.world.collision_objects
+                if o.id.startswith('cube_') and o.id not in seen]
+        # Tipped over: keep the tilt for collisions
+        self.apply(gone + [cube_object(c.name, c.x, c.y, c.z + CUBE_LIFT, yaw_quat(c.yaw) if c.upright else c.q)
+                           for c in cubes])
         return cubes
 
     def run(self):
@@ -180,19 +187,26 @@ class Packer(Node):
                         for i, (x, y, yaw) in enumerate(self.poses)])
 
         attempts = {}
-        cubes = []
+        cubes, ever_seen = [], set()
+        home = False  # arm already home, out of the camera's view
         while rclpy.ok():
             cubes = self.measure()
-            if len(cubes) != len(self.poses):
-                self.get_logger().error(f'Measured {len(cubes)} of {len(self.poses)} cubes on {self.topic}, '
-                                        'is arm_gz.launch.xml running?')
-                break
+            if cubes is None:
+                self.get_logger().error('No camera frames on /detected_cubes, is arm_gz.launch.xml running?')
+                return
+            ever_seen.update(c.name for c in cubes)
             occupied = {c.nearest_slot() for c in cubes if c.in_tray()}
             todo = [c for c in cubes
                     if not c.in_tray() and c.on_table() and attempts.get(c.name, 0) < MAX_ATTEMPTS]
             free = [s for s in range(SLOT_ROWS * SLOT_COLS) if s not in occupied]
             if not todo or not free:
+                # Nothing left in sight: look once more from home, where the arm can't hide a cube
+                if self.sim and free and not home:
+                    home = self.go_home.call(Trigger.Request()).success
+                    if home:
+                        continue
                 break
+            home = False
             cube = min(todo, key=lambda c: math.hypot(c.x, c.y))
             slot = free[0]
             attempts[cube.name] = attempts.get(cube.name, 0) + 1
@@ -208,10 +222,14 @@ class Packer(Node):
             if c.in_tray():
                 packed += 1
             else:
-                why = 'not standing on the table' if not c.on_table() else 'gave up after retries'
+                why = ('not standing on the table' if not c.on_table() else
+                       'gave up after retries' if attempts.get(c.name, 0) >= MAX_ATTEMPTS else 'tray is full')
                 self.get_logger().warn(f'{c.name} left out at ({c.x:.3f}, {c.y:.3f}, {c.z:.3f}): {why}')
-        self.get_logger().info(f'Packed {packed}/{len(cubes)} cubes')
-        if self.go_home.call(Trigger.Request()).success:
+        lost = sorted(ever_seen - {c.name for c in cubes})
+        for name in lost:
+            self.get_logger().warn(f'{name} left out: no longer seen, dropped off the table?')
+        self.get_logger().info(f'Packed {packed}/{len(cubes) + len(lost)} cubes')
+        if home or self.go_home.call(Trigger.Request()).success:
             self.get_logger().info('Job done, arm is home')
 
 

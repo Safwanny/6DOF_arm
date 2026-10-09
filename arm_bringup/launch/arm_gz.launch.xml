@@ -23,20 +23,12 @@
     <!-- The gz_ros2_control plugin in the URDF starts the controller_manager -->
     <node pkg="ros_gz_sim" exec="create" args="-topic robot_description -name robot_arm" />
 
-    <!-- /model/cube_N/pose: where each cube really is (published by the cube, see spawn_cubes.py);
-         the ground truth for checking the camera, and what packer.py uses with perception:=false -->
     <node pkg="ros_gz_bridge" exec="parameter_bridge"
           args="/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock
                 /camera/image@sensor_msgs/msg/Image[gz.msgs.Image
                 /camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image
                 /camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo
-                /camera/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked
-                /model/cube_0/pose@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V
-                /model/cube_1/pose@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V
-                /model/cube_2/pose@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V
-                /model/cube_3/pose@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V
-                /model/cube_4/pose@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V
-                /model/cube_5/pose@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V" />
+                /camera/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked" />
 
     <!-- Same pose as the camera model in table.sdf -->
     <node pkg="tf2_ros" exec="static_transform_publisher"
