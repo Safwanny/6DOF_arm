@@ -8,7 +8,7 @@
   </description>
   <maintainer email="safwan.shaikh@gmail.com">Safwan</maintainer>
 
-  <license>Apache-2.0</license>
+  <license>Proprietary</license>
 
   <url type="website">http://moveit.ros.org/</url>
   <url type="bugtracker">https://github.com/moveit/moveit2/issues</url>

@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>Custom messages for commanding the arm</description>
   <maintainer email="safwan.shaikh@gmail.com">safwan</maintainer>
-  <license>Apache-2.0</license>
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
