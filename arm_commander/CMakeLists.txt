@@ -30,4 +30,6 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}/
 )
 
+install(PROGRAMS scripts/packer.py DESTINATION lib/${PROJECT_NAME})
+
 ament_package()
