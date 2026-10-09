@@ -13,37 +13,62 @@ TABLE_TOP, SIZE = 0.15, 0.04  # match pick_place.cpp
 MIN_RED, MAX_GREEN_BLUE = 120, 80
 # Cubes on the table or in the tray; a cube lifted in the gripper is ignored
 Z_RANGE = (TABLE_TOP, TABLE_TOP + 0.1)
-MIN_PIXELS = 30
-# Points this close to the highest point of a blob belong to its top face
-TOP_FACE = 0.003
+MIN_PIXELS = 15
+# A surface whose normal is this close to vertical is a cube's top face
+UP = 0.9
+# Share of a top face's area that survives (the normals drop the edge pixels); measured in Gazebo,
+# a top region this many faces large holds that many touching cubes
+TOP_SEEN = 0.74
 # A detection this close to a cube's last spot is that cube
 SAME_CUBE = 0.03
 
 
 def detect(xyz, bgr, rot, trans):
-    """Cubes as (x, y, z, yaw) in base_link.
+    """Cubes as (x, y, z, yaw, upright) in base_link.
 
-    xyz: h x w x 3 points in the camera frame, bgr: h x w x 3 uint8, rot/trans: camera pose in base_link."""
+    xyz: h x w x 3 points in the camera frame, bgr: h x w x 3 uint8, rot/trans: camera pose in base_link.
+    An upright cube is found by its top face; touching cubes are split by the size of their shared top.
+    Red that has no top face (a cube on its edge or leaning) is reported at its centre, not upright."""
     b, g, r = (bgr[..., i].astype(int) for i in range(3))
-    mask = (r > MIN_RED) & (g < MAX_GREEN_BLUE) & (b < MAX_GREEN_BLUE) & np.isfinite(xyz).all(axis=2)
     pts = xyz @ rot.T + trans
-    mask &= (pts[..., 2] > Z_RANGE[0]) & (pts[..., 2] < Z_RANGE[1])
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
+    red = ((r > MIN_RED) & (g < MAX_GREEN_BLUE) & (b < MAX_GREEN_BLUE) & np.isfinite(pts).all(axis=2)
+           & (pts[..., 2] > Z_RANGE[0]) & (pts[..., 2] < Z_RANGE[1]))
+    # Surface normal per pixel from its neighbours; |normal| / 4 is the area the pixel covers
+    dx, dy = np.zeros_like(pts), np.zeros_like(pts)
+    dx[:, 1:-1] = pts[:, 2:] - pts[:, :-2]
+    dy[1:-1] = pts[2:] - pts[:-2]
+    normal = np.cross(dx, dy)
+    size = np.linalg.norm(normal, axis=2)
+    top = red & (np.abs(normal[..., 2]) > UP * size) & np.isfinite(size)
+
     cubes = []
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(top.astype(np.uint8), connectivity=8)
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < MIN_PIXELS:
             continue
-        blob = pts[labels == i]
-        top_z = blob[:, 2].max()
-        top = blob[blob[:, 2] > top_z - TOP_FACE]
-        x, y = top[:, 0].mean(), top[:, 1].mean()
-        (_, _), (_, _), angle = cv2.minAreaRect(top[:, :2].astype(np.float32))
-        cubes.append((float(x), float(y), float(top_z - SIZE / 2), math.radians(angle) % (math.pi / 2)))
+        face = pts[labels == i]
+        count = max(1, round(size[labels == i].sum() / 4 / (TOP_SEEN * SIZE**2)))
+        groups = [face]
+        if count > 1:
+            _, ids, _ = cv2.kmeans(face[:, :2].astype(np.float32), count, None,
+                                   (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 50, 1e-4), 5,
+                                   cv2.KMEANS_PP_CENTERS)
+            groups = [face[ids.ravel() == k] for k in range(count)]
+        for f in groups:
+            (_, _), (_, _), angle = cv2.minAreaRect(f[:, :2].astype(np.float32))
+            cubes.append((float(f[:, 0].mean()), float(f[:, 1].mean()), float(np.median(f[:, 2]) - SIZE / 2),
+                          math.radians(angle) % (math.pi / 2), True))
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(red.astype(np.uint8), connectivity=8)
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] >= MIN_PIXELS and not top[labels == i].any():
+            c = pts[labels == i].mean(axis=0)
+            cubes.append((float(c[0]), float(c[1]), float(c[2]), 0.0, False))
     return cubes
 
 
 def match(prev, dets):
-    """Give each detection a cube name: {name: (x, y, z, yaw)}.
+    """Give each detection a cube name: {name: detection}.
 
     prev holds every known cube's last spot, so a cube that is briefly hidden keeps its name."""
     named, left, free = {}, list(dets), dict(prev)
@@ -114,11 +139,14 @@ def main():
             self.known.update(named)
 
             out = TFMessage()
-            for name, (x, y, z, yaw) in sorted(named.items()):
+            for name, (x, y, z, yaw, upright) in sorted(named.items()):
                 c = TransformStamped()
                 c.header.stamp, c.header.frame_id, c.child_frame_id = msg.header.stamp, 'base_link', name
                 c.transform.translation.x, c.transform.translation.y, c.transform.translation.z = x, y, z
-                c.transform.rotation.z, c.transform.rotation.w = math.sin(yaw / 2), math.cos(yaw / 2)
+                if upright:
+                    c.transform.rotation.z, c.transform.rotation.w = math.sin(yaw / 2), math.cos(yaw / 2)
+                else:  # tilt it 45 degrees so the packer sees it can't be grasped from above
+                    c.transform.rotation.x, c.transform.rotation.w = math.sin(math.pi / 8), math.cos(math.pi / 8)
                 out.transforms.append(c)
             self.pub.publish(out)
 

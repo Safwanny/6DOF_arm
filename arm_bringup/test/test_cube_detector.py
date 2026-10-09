@@ -10,8 +10,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 from cube_detector import SIZE, TABLE_TOP, detect, match  # noqa: E402
 
 
-def render(cubes, h=240, w=320, step=0.002):
-    """Straight-down view of the table, camera frame = base_link: only top faces are seen."""
+def render(cubes, tipped=(), h=240, w=320, step=0.002):
+    """Straight-down view of the table, camera frame = base_link: only top faces are seen.
+
+    A tipped cube shows as a red patch sloping at 45 degrees."""
     ys, xs = np.mgrid[0:h, 0:w]
     xyz = np.stack([0.4 + xs * step, -0.3 + ys * step, np.full((h, w), TABLE_TOP)], axis=2)
     bgr = np.zeros((h, w, 3), np.uint8)
@@ -23,13 +25,20 @@ def render(cubes, h=240, w=320, step=0.002):
         on = (abs(u) < SIZE / 2) & (abs(v) < SIZE / 2)
         xyz[on, 2] = TABLE_TOP + SIZE
         bgr[on] = (25, 25, 200)  # red cube
+    for x, y in tipped:
+        on = (abs(xyz[..., 0] - x) < SIZE / 2) & (abs(xyz[..., 1] - y) < SIZE / 2)
+        xyz[on, 2] = TABLE_TOP + SIZE / 2 + (xyz[on, 0] - x)
+        bgr[on] = (25, 25, 200)
     return xyz, bgr
 
 
-truth = [(0.5, -0.2, 0.3), (0.7, -0.1, 1.1)]
-found = sorted(detect(*render(truth), np.eye(3), np.zeros(3)))
-assert len(found) == 2, found
-for (x, y, yaw), (fx, fy, fz, fyaw) in zip(truth, found):
+# Two apart, two touching side by side (one shared top face), one tipped over
+truth = [(0.5, -0.2, 0.3), (0.7, -0.1, 1.1), (0.6, 0.1, 0.0), (0.6, 0.14, 0.0)]
+found = detect(*render(truth, tipped=[(0.8, 0.1)]), np.eye(3), np.zeros(3))
+assert len(found) == 5, found
+upright = sorted(f for f in found if f[4])
+assert [round(f[0], 2) for f in found if not f[4]] == [0.8], found
+for (x, y, yaw), (fx, fy, fz, fyaw, _) in zip(sorted(truth), upright):
     assert math.hypot(fx - x, fy - y) < 0.005, (x, y, fx, fy)
     assert abs(fz - (TABLE_TOP + SIZE / 2)) < 0.002, fz
     err = (fyaw - yaw) % (math.pi / 2)
